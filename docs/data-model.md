@@ -2,7 +2,7 @@
 
 Status: draft · Last updated: 2026-10-09 · Part of the [backend migration plan](overview.md)
 
-Full diagram with all columns: [diagrams/schema.mmd](diagrams/schema.mmd) (Mermaid). This document and the diagram are the source of truth until the Prisma schema and migrations exist.
+Full diagram with all columns: [diagrams/schema.mmd](diagrams/schema.mmd) (Mermaid). The exact constraint SQL (`CHECK`s, composite keys, partial index, delete rules) is in [diagrams/schema.sql](diagrams/schema.sql), which also imports into DrawSQL / dbdiagram.io; use it when writing the Prisma migrations. This document and both files are the source of truth until the Prisma schema and migrations exist; keep them in sync.
 
 ## Game data
 
