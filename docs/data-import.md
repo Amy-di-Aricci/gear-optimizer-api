@@ -1,6 +1,6 @@
 # Data import
 
-Status: draft · Last updated: 2026-10-08 · Part of the [backend migration plan](overview.md)
+Status: draft · Last updated: 2026-10-09 · Part of the [backend migration plan](overview.md)
 
 The API doesn't scrape or crawl anything. Game data enters the system in one of three ways, and every one ends as a **draft change set** that an editor reviews and publishes ([publishing model](data-model.md#editorial--publishing)):
 
@@ -32,7 +32,7 @@ A versioned JSON document. The schema is the contract between the external tool 
       "type": "RAID",                    // or "DUNGEON"
       "name": "The Venomous Abyss",
       "journalInstanceId": 1234,
-      "encounters": [
+      "raidBosses": [                    // raids only; omitted for dungeons
         { "code": "ROTMIRE", "name": "Rotmire", "journalEncounterId": 5678 }
       ]
     }
@@ -46,15 +46,15 @@ A versioned JSON document. The schema is the contract between the external tool 
       "armorType": "LEATHER",            // weaponType / offhandType / roles / mainStats as applicable
       "secondaryStats": ["CRIT", "HASTE"],
       "specialEffect": null,
-      "sources": [{ "instance": "TVA", "encounter": "ROTMIRE" }]
+      "source": { "instance": "TVA", "raidBoss": "ROTMIRE" }  // exactly one; "raidBoss" only for raids
     }
   ]
 }
 ```
 
 Semantics:
-- **Partial imports are normal.** A file only affects the instances it contains. Items that used to drop from an included instance but are missing from the file are proposed as **removals of that source**, never as deletions of the item itself.
-- **Idempotent.** Items are keyed by Blizzard item ID and instances/encounters by `code`. Uploading the same file twice produces an empty diff.
+- **Partial imports are normal.** A file only affects the instances it contains. An item has exactly one source ([data model](data-model.md#game-data)). If it now drops somewhere else in the file, the diff proposes a source change. If it used to drop from an included instance but is missing from the file, the diff proposes **deleting the item** and highlights it, so an editor can discard that entry when the file is simply incomplete. Deleting an item that's on any wishlist is blocked: the diff shows "on N wishlists", and the change set can't be published until that entry is discarded.
+- **Idempotent.** Items are keyed by Blizzard item ID and instances/raid bosses by `code`. Uploading the same file twice produces an empty diff.
 - `dataStage` is stored on each item as `imported_from` (`PRE_RELEASE` \| `RETAIL` \| `MANUAL`), so editors can see which items haven't been confirmed against retail data yet. Pre-release values (stats, icons, names, sources) can change before launch, so re-import after launch and review the diff.
 - Seasons and their rotations aren't part of the import file. Editors manage them in the admin panel.
 
@@ -73,7 +73,7 @@ Limits: 5 MB per file on this endpoint (the global body limit stays small), a st
 A second import path, for content that's already live on retail:
 
 - An editor enters journal instance IDs in the admin panel → the API starts a background job (`import_job` table: status, progress, errors).
-- The job calls the Blizzard Game Data API: `journal-instance/{id}` → encounters, `journal-encounter/{id}` → items dropped, `item/{id}` + `item-media/{id}` → details and icon. It normalises the result into the **same import format** and continues through the same diff → draft change set path.
+- The job calls the Blizzard Game Data API: `journal-instance/{id}` → encounters (raid bosses), `journal-encounter/{id}` → items dropped, `item/{id}` + `item-media/{id}` → details and icon. It normalises the result into the **same import format** and continues through the same diff → draft change set path.
 - The Blizzard client ID and secret are backend environment secrets (Render), never in the repo.
 - The free Render instance stays awake while the job runs. The job must be resumable, since a restart mid-job just re-runs it (idempotent).
 

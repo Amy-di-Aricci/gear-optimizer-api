@@ -1,6 +1,6 @@
 # Security hardening
 
-Status: draft · Last updated: 2026-10-08 · Part of the [backend migration plan](overview.md)
+Status: draft · Last updated: 2026-10-09 · Part of the [backend migration plan](overview.md)
 
 Most valuable data: **user accounts, linked identities, characters and wishlists**, and **editor/admin privileges** (whoever gets them can change what every visitor sees). The checklist below follows the **OWASP Top 10 (2025 edition)**. Check the official list, since category names shifted between editions. For a structured self-review, use **OWASP ASVS Level 1** as the checklist; it's the "what to verify" companion to the Top 10.
 
@@ -24,9 +24,9 @@ Most valuable data: **user accounts, linked identities, characters and wishlists
 - **Public repositories:** the rules for keeping secrets, personal data and private material out of the public repos are in [overview.md](overview.md#public-repositories).
 
 - **CSRF:** `SameSite=Lax` cookies + same-origin API. Additionally reject state-changing requests (`POST/PUT/PATCH/DELETE`) whose `Origin` header isn't your site.
-- **GDPR / data protection:** data minimisation ([user data model](data-model.md#users-phase-3)), account deletion and export (phase 4). Define retention: delete sessions after expiry, purge soft-deleted users after 30 days. Keep a short record of what personal data is stored where. Neon, Render and Netlify act as processors, so check each one's DPA.
+- **GDPR / data protection:** data minimisation ([user data model](data-model.md#users-phase-3)), account deletion and export (phase 4). Define retention: delete sessions after expiry, purge soft-deleted users after 30 days (their personal data is deleted and the `app_user` row is anonymised, see [account deletion](data-model.md#users-phase-3)). Keep a short record of what personal data is stored where. Neon, Render and Netlify act as processors, so check each one's DPA.
 - **Backups:** the Neon free tier has only short point-in-time restore. Add a weekly GitHub Actions `pg_dump` that's **encrypted** (e.g. with `age`) before it's stored, because it contains user data. Practise a restore once.
-- **Least privilege:** the production DB user used by the app can't create or drop tables (migrations use a separate role from CI). GitHub Actions workflows declare minimal `permissions:`. Only the owner(s) have Render/Neon/Netlify admin access.
+- **Least privilege:** the production DB user used by the app can't create or drop tables (migrations use a separate role from CI), and it can't change or bypass constraints, since only the table owner can. On `audit_log` it only has `INSERT` and `SELECT`, so entries can't be edited or deleted; the log's `payload` never holds personal data. GitHub Actions workflows declare minimal `permissions:`. Only the owner(s) have Render/Neon/Netlify admin access.
 
 ## Security tests & tools you can run (all free)
 

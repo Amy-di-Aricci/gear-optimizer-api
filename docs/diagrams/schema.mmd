@@ -1,0 +1,181 @@
+erDiagram
+  expansion ||--o{ season : has
+  season ||--o{ season_instance : rotates
+  instance ||--o{ season_instance : "is in"
+  instance ||--o{ raid_boss : "has (raids only)"
+  instance |o--o| item_source : "dungeon"
+  raid_boss |o--o| item_source : "raid boss"
+  item_source ||--o{ item : "drops"
+  character_class ||--o{ spec : has
+  character_class ||--o{ character : "class of"
+  spec |o--o{ character : "active spec (same class)"
+  app_user ||--o{ user_identity : "logs in via"
+  app_user ||--o{ session : has
+  user_identity ||--o{ character : "syncs (Battle.net)"
+  app_user ||--o{ character : owns
+  app_user ||--o{ wishlist : "owns (always)"
+  season ||--o{ wishlist : "for"
+  spec ||--o{ wishlist : "for"
+  character |o--o{ wishlist : "optional, same owner"
+  wishlist ||--o{ wishlist_item : contains
+  item ||--o{ wishlist_item : "wished (delete blocked)"
+  change_set ||--o{ change_set_entry : contains
+  app_user ||--o{ change_set : "creates / resolves"
+  app_user |o--o{ audit_log : "acts (NULL = job)"
+
+  expansion {
+    int id PK
+    string code UK "MN, TWW"
+    string name
+    string image_key
+    string slim_image_key
+    int sort_order
+    int max_level "character level cap"
+  }
+  season {
+    int id PK
+    string code UK "MNS2"
+    int expansion_id FK
+    string short_name
+    string tier_name
+    string image_key
+    timestamptz starts_at
+    timestamptz ends_at "after starts_at"
+    bool is_current "only one true; never FROZEN"
+    enum status "ACTIVE | FROZEN"
+  }
+  instance {
+    int id PK
+    string code UK "FLOOD, TVA"
+    enum type "DUNGEON | RAID"
+    string name
+    string short_name
+    int blizzard_journal_id UK
+    string image_key
+  }
+  season_instance {
+    int season_id PK, FK
+    int instance_id PK, FK
+  }
+  raid_boss {
+    int id PK
+    int instance_id FK "(instance_id, instance_type)"
+    enum instance_type "always RAID"
+    string code UK "ULGRAX"
+    string name
+    int blizzard_encounter_id UK
+    int sort_order
+  }
+  item_source {
+    int id PK
+    enum type "DUNGEON | RAID"
+    int instance_id FK, UK "dungeons only"
+    int raid_boss_id FK, UK "raids only"
+  }
+  item {
+    int id PK "Blizzard item ID"
+    int source_id FK "exactly one source"
+    string name
+    string icon_key
+    enum slot "EItemSlot + TWOHAND"
+    enum armor_type "CHECK: armor slots only"
+    enum weapon_type "CHECK: MAINHAND, TWOHAND, RANGED"
+    enum offhand_type "CHECK: OFFHAND only"
+    enum_array main_stats
+    enum_array secondary_stats
+    enum_array roles "trinkets only"
+    string special_effect "nullable"
+    enum imported_from "PRE_RELEASE | RETAIL | MANUAL"
+    jsonb source_payload
+  }
+  character_class {
+    int id PK
+    string name UK
+  }
+  spec {
+    int id PK
+    int class_id FK "UK (class_id, name)"
+    string name
+    enum role
+    enum main_stat
+    enum_array weapon_types
+    enum_array offhand_types
+  }
+  app_user {
+    int id PK
+    string display_name
+    enum role "USER | EDITOR | ADMIN"
+    timestamptz created_at
+    timestamptz deleted_at "tombstone, never hard-deleted"
+  }
+  user_identity {
+    int id PK
+    int user_id FK
+    enum provider "BNET | DISCORD | GOOGLE"
+    string provider_user_id "UK with provider"
+  }
+  session {
+    string id PK "hash of the token"
+    int user_id FK
+    timestamptz expires_at
+  }
+  character {
+    int id PK
+    int user_id FK
+    int identity_id FK "Battle.net identity of same user"
+    string region "UK with bnet_character_id"
+    bigint bnet_character_id
+    string realm_slug
+    string name
+    int level "listed only at max_level"
+    int class_id FK
+    int active_spec_id FK "spec of class_id"
+    timestamptz last_synced_at
+  }
+  wishlist {
+    int id PK
+    int user_id FK "required owner"
+    int season_id FK
+    int spec_id FK
+    int character_id FK "optional; must belong to user_id"
+    string name
+    timestamptz archived_at "nullable"
+  }
+  wishlist_item {
+    int wishlist_id PK, FK
+    int item_id PK, FK
+    timestamptz added_at
+    timestamptz obtained_at "nullable"
+  }
+  change_set {
+    int id PK
+    string title
+    enum origin "IMPORT | MANUAL"
+    enum status "DRAFT | PUBLISHED | DISCARDED"
+    bigint base_version "data_version it is based on"
+    int created_by FK
+    timestamptz created_at
+    int resolved_by FK "set when not DRAFT"
+    timestamptz resolved_at "set when not DRAFT"
+  }
+  change_set_entry {
+    int id PK
+    int change_set_id FK
+    string entity "item, season, ..."
+    jsonb entity_key "natural key; UK per change set"
+    enum op "CREATE | UPDATE | DELETE"
+    jsonb before
+    jsonb after
+  }
+  data_version {
+    int id PK "always 1"
+    bigint version "ETag"
+  }
+  audit_log {
+    bigint id PK
+    int actor_id FK "NULL = scheduled job"
+    string action
+    string target
+    jsonb payload "no personal data"
+    timestamptz created_at
+  }

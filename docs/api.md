@@ -1,20 +1,20 @@
 # API
 
-Status: draft · Last updated: 2026-10-08 · Part of the [backend migration plan](overview.md)
+Status: draft · Last updated: 2026-10-09 · Part of the [backend migration plan](overview.md)
 
 ## API outline
 
 Public (cacheable, no auth):
 - `GET /api/meta`: current `data_version`, current season code
 - `GET /api/expansions`, `GET /api/seasons`
-- `GET /api/seasons/:code`: season with its instances and encounters
+- `GET /api/seasons/:code`: season with its instances and raid bosses
 - `GET /api/seasons/:code/items`: **all items for the season in one response** (a few hundred rows, tens of KB gzipped). Keep the current client-side filtering. It's instant for the user and saves round-trips to a sleeping server.
 - `GET /api/specs`
 - Caching: see [caching](#caching--cold-starts).
 
 Auth: `GET /api/auth/{bnet|discord|google}` → provider → `GET /api/auth/{provider}/callback`, `POST /api/auth/logout`, `GET /api/me`
 
-User (session required): `/api/me/characters` (+ `POST /sync` for Battle.net import), `/api/me/wishlists` CRUD, `DELETE /api/me` (account deletion), `GET /api/me/export` (GDPR export)
+User (session required): `/api/me/characters` (max-level characters only; `POST /sync` for Battle.net import, see [character sync](data-model.md#users-phase-3)), `/api/me/wishlists` CRUD, `DELETE /api/me` (account deletion), `GET /api/me/export` (GDPR export)
 
 Editor: `/api/admin/change-sets` (list, create, diff, publish, discard), `/api/admin/items|instances|seasons…` (edits create change-set entries)
 
