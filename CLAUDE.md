@@ -8,6 +8,7 @@ The backend migration plan lives in `docs/`. Read `docs/overview.md` first: it h
 
 - `docs/data-model.md`: PostgreSQL schema
 - `docs/api.md`: endpoints, CDN caching, auth
+- `docs/environments.md`: development (local Postgres), staging, production
 - `docs/data-import.md`: import file format, upload flow, optional Blizzard API import
 - `docs/security.md`: OWASP-based hardening; applies to every change
 - `docs/testing.md`: testing strategy and CI gates

@@ -1,0 +1,37 @@
+# Render Blueprint: one service per deployed stage (docs/environments.md).
+# Deploys are triggered by CI (deploy hooks) after migrations, not by Render's
+# auto-deploy. DATABASE_URL is set per service in the dashboard.
+services:
+  - type: web
+    name: gear-optimizer-api-staging
+    runtime: node
+    region: frankfurt
+    plan: free
+    autoDeploy: false
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: staging
+      - key: DATABASE_URL
+        sync: false
+
+  - type: web
+    name: gear-optimizer-api
+    runtime: node
+    region: frankfurt
+    plan: free
+    autoDeploy: false
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start:prod
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false

@@ -8,7 +8,7 @@ Aim for **confidence in the risky parts** (permissions, the publish transaction,
 
 | Layer | Tool | What to test |
 | --- | --- | --- |
-| Unit | **Vitest** (or Jest, the Nest default; pick one and stay with it) | Pure logic: change-set diffing, item ↔ DTO mapping, slot/type validation rules, BIS maths later. |
+| Unit | **Vitest** (chosen over Jest; TypeScript is transpiled with `tsc` in `vitest.config.mts` so Nest gets decorator metadata) | Pure logic: change-set diffing, item ↔ DTO mapping, slot/type validation rules, BIS maths later. |
 | Integration | Vitest + **real Postgres** (Testcontainers locally, a `postgres` service container in GitHub Actions) | Prisma queries, migrations, **publish transaction** (all-or-nothing, `data_version` bump, audit row), frozen-season rejection, cascade on account deletion. No DB mocks here; mocks hide exactly the bugs these tests exist for. |
 | HTTP / e2e | **Supertest** against the booted Nest app + test DB | Request validation, status codes, cache headers (`no-store` on private routes), session cookie flags. |
 | **Authorization matrix** | Supertest, generated | See [security](security.md). Every route × every actor (anonymous, user A, user B, editor, admin) → expected status. **New routes without a declared policy fail the test.** |

@@ -1,0 +1,40 @@
+name: Deploy
+
+# Called by CI for each stage. Each GitHub environment (`staging`,
+# `production`) holds its own secrets under the same names:
+#   MIGRATION_DATABASE_URL  Neon URL for the migration role of that stage
+#   RENDER_DEPLOY_HOOK_URL  deploy hook of that stage's Render service
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+        env:
+          # Migration role, separate from the app's runtime role (docs/security.md).
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      - name: Trigger Render deploy
+        run: curl --fail --silent --show-error --output /dev/null -X POST "$RENDER_DEPLOY_HOOK_URL"
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}

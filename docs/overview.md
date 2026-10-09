@@ -1,6 +1,6 @@
 # Backend migration plan: overview
 
-Status: draft · Last updated: 2026-10-08
+Status: draft · Last updated: 2026-10-09
 
 This is the entry point. Cross-repo decisions, phases and the decisions log live **only here**; the other documents hold the details for one area.
 
@@ -9,6 +9,7 @@ This is the entry point. Cross-repo decisions, phases and the decisions log live
 | [overview.md](overview.md) | API | Goals, architecture, OpenAPI decision, repos & team, public-repo rules, phases, decisions log |
 | [data-model.md](data-model.md) | API | PostgreSQL schema: game data, publishing, users, BIS |
 | [api.md](api.md) | API | Endpoints, CDN caching & cold starts, auth |
+| [environments.md](environments.md) | API | Development (local Postgres), staging and production: config, databases, release flow |
 | [data-import.md](data-import.md) | API | Import file format, upload flow, optional Blizzard API import |
 | [security.md](security.md) | API (applies to all repos) | OWASP Top 10 mapping, hardening, security tools |
 | [testing.md](testing.md) | API | API testing strategy, CI gates for all repos |
@@ -168,6 +169,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 - Scraper: `git init`, housekeeping, push to a **private** repo (see its `docs/plan.md`).
 - Create Neon (Frankfurt) and Render accounts. Register OAuth apps later, in phase 3.
 - Finish the `gear-optimizer-api` scaffold (NestJS app already generated): add Prisma, health endpoint, Swagger in dev, CI, deployed to Render, Netlify `/api` proxy working.
+- Three stages ([environments.md](environments.md)): local Postgres for development, staging (Render + Neon branch) and production, with CI deploying `main` to staging, then to production after approval.
 - Testing & security baseline in CI for both public repos: Vitest set up, lint + typecheck, `npm audit`, gitleaks, Semgrep, CodeQL, Dependabot, branch protection.
 - **Done when:** `https://<site>.netlify.app/api/health` returns OK.
 
@@ -190,7 +192,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 - Change sets: an editor **uploads an import file in the admin panel**, the UI shows the diff, an editor publishes. Manual edits to items, seasons and instances go through change sets too.
 - Admin: user list + role management.
 - Privacy policy page.
-- Staging environment (Render + Neon branch + Netlify branch deploy). ZAP baseline scan after staging deploys. Playwright e2e for the upload → publish flow.
+- Netlify branch deploy for staging (the API side exists since phase 0). ZAP baseline scan after staging deploys. Playwright e2e for the upload → publish flow.
 - Tests: publish transaction, frozen-season rejection, import validation errors, authz matrix covering editor/admin, session tests (regeneration on login, revocation on role change), rate-limit check.
 - **Done when:** an editor can upload a new season's import file and publish it from the browser, with no code changes or deploys.
 
@@ -235,6 +237,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-08 | Blizzard API import from the admin panel is an optional later feature. |
 | 2026-10-08 | Repos stay on the owner's personal account with collaborators; no GitHub organization for now. |
 | 2026-10-08 | License: AGPL-3.0-only for both public repos, © Sajgonka; covers code and original assets, not Blizzard content. Community-project disclaimer in READMEs and in the app footer. |
+| 2026-10-09 | Three stages: development (local PostgreSQL), staging and production (each its own Render service and Neon branch). Staging moved forward from phase 3 to phase 0. `APP_ENV` names the stage; staging runs `NODE_ENV=production`. |
 
 ## Open questions
 

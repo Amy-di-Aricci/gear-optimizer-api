@@ -9,21 +9,68 @@ Where is my loot!? is a **community fan project**. It is not affiliated with or 
 
 ## Status
 
-Early development. The NestJS scaffold is in place; the plan is in [`docs/`](docs/overview.md), starting with [docs/overview.md](docs/overview.md).
+Early development (phase 0: groundwork). The plan is in [`docs/`](docs/overview.md), starting with [docs/overview.md](docs/overview.md).
 
-Planned stack: NestJS, Prisma, PostgreSQL (Neon), hosted on Render.
+Stack: NestJS 11, Prisma 7, PostgreSQL (Neon), hosted on Render. Tests use Vitest + Supertest.
 
 ## Running locally
 
+Requires Node.js 24 or later and a local PostgreSQL 15+. The three stages (development, staging, production) are described in [docs/environments.md](docs/environments.md).
+
 ```bash
 npm install
+psql -U postgres -h localhost -f scripts/db/setup-local.sql   # once: creates gear_optimizer_dev and gear_optimizer_test
+cp .env.example .env                                           # then replace CHANGE_ME with the gear_dev password
+cp .env.test.example .env.test                                 # same
+npm run db:generate
+npm run db:migrate
 npm run start:dev
 ```
 
+- Health check: http://localhost:3000/api/health
+- Swagger UI (development only): http://localhost:3000/api/docs
+
+The API boots without a database; only routes that query it need `DATABASE_URL`.
+
+### Database
+
+The schema lives in `prisma/schema.prisma`. After changing it:
+
 ```bash
-npm run test       # unit tests
-npm run test:e2e   # end-to-end tests
+npm run db:migrate -- --name <change>   # creates and applies a migration on the dev database
 ```
+
+Staging and production migrations run only from CI (`prisma migrate deploy`).
+
+### Tests and checks
+
+```bash
+npm test                # unit tests (src/**/*.spec.ts)
+npm run test:e2e        # HTTP tests against the booted app (test/**/*.e2e-spec.ts)
+npm run lint
+npm run typecheck
+npm run format:check
+```
+
+`npm run test:e2e` migrates the local test database (`.env.test`) first. Without `.env.test`, tests that need Postgres are skipped; CI always runs them.
+
+### API contract
+
+`openapi.json` is generated from the controllers and committed; the frontend generates its client from it. After changing the API:
+
+```bash
+npm run openapi:export
+```
+
+CI fails if the committed file is out of date.
+
+## Deployment
+
+Pushes to `main` run CI, then deploy to **staging** and, after a reviewer approves, to **production**. Each stage is off until its repository variable is set. See [docs/environments.md](docs/environments.md#staging-and-production) for the setup and [`render.yaml`](render.yaml) for the Render services.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
