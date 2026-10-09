@@ -77,9 +77,9 @@ erDiagram
     int source_id FK "exactly one source"
     string name
     string icon_key
-    enum slot "EItemSlot + TWOHAND"
+    enum slot "EItemSlot; TWOHAND, no RANGED"
     enum armor_type "CHECK: armor slots only"
-    enum weapon_type "CHECK: MAINHAND, TWOHAND, RANGED"
+    enum weapon_type "CHECK: MAINHAND, TWOHAND"
     enum offhand_type "CHECK: OFFHAND only"
     enum_array main_stats
     enum_array secondary_stats

@@ -73,7 +73,7 @@ CREATE TABLE item (
   source_id       integer NOT NULL REFERENCES item_source (id),  -- exactly one source
   name            varchar(255) NOT NULL,
   icon_key        varchar(255),
-  slot            varchar(32) NOT NULL,              -- EItemSlot + TWOHAND
+  slot            varchar(32) NOT NULL,              -- EItemSlot (no RANGED; TWOHAND instead)
   armor_type      varchar(16),                       -- CLOTH | LEATHER | MAIL | PLATE
   weapon_type     varchar(32),                       -- EWeaponType
   offhand_type    varchar(32),                       -- OFFHAND | SHIELD
@@ -236,7 +236,7 @@ ALTER TABLE item ADD CONSTRAINT item_type_columns_match_slot CHECK (
   CASE
     WHEN slot IN ('HEAD','SHOULDER','CHEST','WRIST','HANDS','WAIST','LEGS','FEET')
       THEN armor_type IS NOT NULL AND weapon_type IS NULL AND offhand_type IS NULL
-    WHEN slot IN ('MAINHAND','TWOHAND','RANGED')
+    WHEN slot IN ('MAINHAND','TWOHAND')
       THEN weapon_type IS NOT NULL AND armor_type IS NULL AND offhand_type IS NULL
     WHEN slot = 'OFFHAND'
       THEN offhand_type IS NOT NULL AND armor_type IS NULL AND weapon_type IS NULL
@@ -246,9 +246,8 @@ ALTER TABLE item ADD CONSTRAINT item_type_columns_match_slot CHECK (
 
 ALTER TABLE item ADD CONSTRAINT item_weapon_type_matches_slot CHECK (
   weapon_type IS NULL
-  OR (slot = 'MAINHAND' AND weapon_type IN ('DAGGER','FIST','AXE1H','MACE1H','SWORD1H','WARGLAIVE'))
-  OR (slot = 'TWOHAND'  AND weapon_type IN ('POLEARM','STAFF','AXE2H','MACE2H','SWORD2H'))
-  OR (slot = 'RANGED'   AND weapon_type IN ('BOW','CROSSBOW','GUN','WAND'))
+  OR (slot = 'MAINHAND' AND weapon_type IN ('DAGGER','FIST','AXE1H','MACE1H','SWORD1H','WARGLAIVE','WAND'))
+  OR (slot = 'TWOHAND'  AND weapon_type IN ('POLEARM','STAFF','AXE2H','MACE2H','SWORD2H','BOW','CROSSBOW','GUN'))
 );
 
 ALTER TABLE item ADD CONSTRAINT item_roles_only_on_trinkets

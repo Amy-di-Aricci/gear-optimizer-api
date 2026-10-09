@@ -12,6 +12,27 @@ Public (cacheable, no auth):
 - `GET /api/specs`
 - Caching: see [caching](#caching--cold-starts).
 
+### Item response shape
+
+Items keep the shape of today's `gear-store.json`, so the frontend's filtering and display code keeps working with minimal changes:
+
+```jsonc
+{
+  "itemId": 268283,
+  "name": "Festerbloom Crown",
+  "imgId": "inv_helm_leather_raiddruidmidnight_d_01",
+  "slot": "HEAD",
+  "armorType": "LEATHER",             // or weaponType / offhandType, depending on the slot
+  "mainStats": ["INT"],               // weapons, trinkets and off-hands that have them
+  "secondaryStats": ["CRIT", "HASTE"],
+  "roles": ["DPS_RANGED"],            // trinkets only
+  "specialEffect": null,
+  "lootSource": { "raid": "TVA", "bossName": "ROTMIRE" }   // or a dungeon code: "FLOOD"
+}
+```
+
+Fields that don't apply to the item's slot are left out, as today. `lootSource` is built from `item_source` using instance and raid boss codes. The OpenAPI spec models the item as a union per slot group, like the frontend's `TWowItem`.
+
 Auth: `GET /api/auth/{bnet|discord|google}` → provider → `GET /api/auth/{provider}/callback`, `POST /api/auth/logout`, `GET /api/me`
 
 User (session required): `/api/me/characters` (max-level characters only; `POST /sync` for Battle.net import, see [character sync](data-model.md#users-phase-3)), `/api/me/wishlists` CRUD, `DELETE /api/me` (account deletion), `GET /api/me/export` (GDPR export)
@@ -53,5 +74,5 @@ In every option, the response shape is the same DTO from the OpenAPI spec, so th
 - **Session cookie:** `HttpOnly; Secure; SameSite=Lax`, sessions stored in Postgres. Battle.net access tokens are used at login or sync time to read the character list. Don't keep them long-term. If you must, encrypt them.
 - **Roles:** a `@Roles('EDITOR')` decorator plus a guard. `ADMIN` includes everything an editor can do. Bootstrap the first admin with a one-off script or env var (`BOOTSTRAP_ADMIN_BNET_ID`).
 - **Hardening:** see [security](security.md) for the full OWASP-based checklist and the security tests.
-- **GDPR (EU users):** host the DB and API in Frankfurt. Write a short privacy policy covering what's stored (provider IDs, characters, wishlists) and why. Provide account deletion (hard-delete or anonymise wishlists; anonymised counts can stay in BIS stats) and data export. With only an essential session cookie and no tracking cookies, you don't need a consent banner. If you add analytics, pick a cookieless one.
+- **GDPR (EU users):** host the DB and API in Frankfurt. Write a short privacy policy covering what's stored (provider IDs, characters, wishlists) and why. Provide account deletion (personal data such as identities, characters and wishlists is deleted, and the user row is kept only as an anonymised tombstone, see [account deletion](data-model.md#users-phase-3); BIS stats keep only anonymised counts) and data export. With only an essential session cookie and no tracking cookies, you don't need a consent banner. If you add analytics, pick a cookieless one.
 - **Blizzard API terms:** check the developer terms on caching and storing character data. Store the minimum and refresh on demand.

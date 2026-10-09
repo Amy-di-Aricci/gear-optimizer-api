@@ -42,16 +42,16 @@ Notes:
   | Slot | `armor_type` | `weapon_type` | `offhand_type` |
   | --- | --- | --- | --- |
   | `HEAD`, `SHOULDER`, `CHEST`, `WRIST`, `HANDS`, `WAIST`, `LEGS`, `FEET` | required | null | null |
-  | `MAINHAND`, `TWOHAND`, `RANGED` | null | required | null |
+  | `MAINHAND`, `TWOHAND` | null | required | null |
   | `OFFHAND` (shields and held items) | null | null | required |
   | `NECK`, `FINGER`, `BACK`, `TRINKET` | null | null | null |
 
-  Further checks: `roles` is set exactly when the slot is `TRINKET`; the weapon type matches the slot (two-handed types such as `STAFF`, `POLEARM`, `AXE2H` only in `TWOHAND`; `BOW`, `CROSSBOW`, `GUN`, `WAND` only in `RANGED`; one-handed types in `MAINHAND`). Every one-handed weapon is stored as `MAINHAND`, even when it can also be equipped in the off hand. The frontend's "weapon" filter covers `MAINHAND` + `TWOHAND`, while `RANGED` has its own.
+  Further checks: `roles` is set exactly when the slot is `TRINKET`; the weapon type matches the slot: `MAINHAND` holds one-handed weapons and wands (`DAGGER`, `FIST`, `AXE1H`, `MACE1H`, `SWORD1H`, `WARGLAIVE`, `WAND`), `TWOHAND` holds two-handed weapons including ranged ones (`POLEARM`, `STAFF`, `AXE2H`, `MACE2H`, `SWORD2H`, `BOW`, `CROSSBOW`, `GUN`). Every one-handed weapon is stored as `MAINHAND`, even when it can also be equipped in the off hand. There's no separate ranged slot: in retail all of these are held in the main hand. The frontend shows two weapon icons, "Main-Hand Weapon" and "Two-Hand Weapon".
 - List columns (`main_stats`, `secondary_stats`, `roles`, …) hold enum values. The API rejects duplicates and an empty `roles` list on trinkets when validating input; the database doesn't check this.
 - Fixed game vocabulary (slots, stats, armor/weapon types, roles) stays as **Postgres enums**. It changes about once per expansion and drives UI logic. Content (seasons, instances, bosses) becomes **rows**. The test for which is which: if a new season needs it, it's a row.
 - Display names and images for dungeons and bosses move into the DB. Today they live in frontend mappers.
 - **Frozen seasons:** when a season ends, an admin sets it to `FROZEN`. Change sets that touch a frozen season (its rotation, or items that only drop in its instances) are rejected. Its data is then cached as immutable ([caching](api.md#caching--cold-starts)). An item that drops from an instance shared with an active season can still be edited.
-- Fix while migrating: the old scraper output has `TWOHAND` and `EMiscType`, which the frontend doesn't. The DB becomes the single source of truth: its slot enum is the frontend's `EItemSlot` plus `TWOHAND`.
+- The slot enum matches the frontend's `EItemSlot`, where the former `RANGED` slot became `TWOHAND`. `EMiscType` from the old scraper output isn't kept.
 
 ## Editorial / publishing
 
@@ -114,6 +114,21 @@ Wishlists:
 - A wishlist is tied to one season (`season_id`), and users create new wishlists for new seasons. When a season ends, its wishlists get `archived_at` set and become read-only (still visible to the owner).
 - Possible later, at a season change: an optional `purpose` (`RAID` \| `MPLUS` \| `PVP` \| `OTHER`) on `wishlist`, so BIS lists can be split by content type. Not planned for now.
 - Email: Battle.net doesn't provide one. Don't store emails from Discord/Google unless a feature needs them (data minimisation, GDPR).
+
+## Seeding from the legacy frontend data (phase 1)
+
+The one-off seed reads `gear-store.json`, `manual_items.ts` and `globals/*.ts` from the frontend. The legacy item data was reviewed against Wowhead and corrected at the source before seeding (weapon slots and types, a duplicated item ID), so it satisfies every constraint above. Mapping:
+
+| Legacy | Database |
+| --- | --- |
+| `itemId`, `name`, `imgId` | `item.id`, `item.name`, `item.icon_key` |
+| `lootSource: "FLOOD"` (dungeon code) | `item_source` of type `DUNGEON` for instance `FLOOD` |
+| `lootSource: { raid, bossName }` | `item_source` of type `RAID` for raid boss `bossName` (in raid `raid`) |
+| `slot`, `weaponType`, `armorType`, `offhandType`, `mainStats`, `secondaryStats`, `roles`, `specialEffect` | same-named columns; missing lists become `{}` (`roles` stays NULL outside trinkets) |
+| `miscType` | dropped |
+| items from `gear-store.json` / `manual_items.ts` | `imported_from` = `PRE_RELEASE` / `MANUAL`; the phase 2 retail re-check confirms them |
+
+The seed runs in one transaction: a row that breaks a constraint aborts it with that row's item ID, rather than seeding partial data.
 
 ## Rules enforced by the API
 
