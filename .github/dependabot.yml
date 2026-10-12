@@ -1,26 +1,73 @@
 version: 2
 updates:
-  # Cooldown: new releases are proposed only after 7 days, so a compromised
-  # release is usually caught and pulled before it reaches a PR.
+  # Cooldown: version updates are proposed only once a release is 7 days old
+  # (14 for major versions), so a compromised release is usually caught and
+  # pulled before it reaches a PR. Security updates are not delayed.
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Warsaw
     cooldown:
       default-days: 7
-    open-pull-requests-limit: 10
+      semver-major-days: 14
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+    ignore:
+      # typescript-eslint supports TypeScript <6.1 only; revisit when it
+      # supports the next major.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+    # A dependency joins the first group it matches. Packages that peer on each
+    # other share a group of every update type, so their majors move together.
     groups:
+      security:
+        applies-to: security-updates
+        patterns: ['*']
       nestjs:
         patterns: ['@nestjs/*']
       prisma:
         patterns: ['prisma', '@prisma/*']
+      vitest:
+        patterns: ['vitest', '@vitest/*']
+      eslint:
+        patterns: ['eslint', '@eslint/*', 'typescript-eslint']
+      production-dependencies:
+        dependency-type: production
+        update-types: [minor, patch]
+        exclude-patterns: ['@nestjs/*', 'prisma', '@prisma/*']
       dev-dependencies:
         dependency-type: development
         update-types: [minor, patch]
+        exclude-patterns:
+          [
+            '@nestjs/*',
+            'prisma',
+            '@prisma/*',
+            'vitest',
+            '@vitest/*',
+            'eslint',
+            '@eslint/*',
+            'typescript-eslint',
+          ]
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Warsaw
     cooldown:
       default-days: 7
+      semver-major-days: 14
+    commit-message:
+      prefix: 'chore(ci)'
+    groups:
+      actions:
+        patterns: ['*']
+        update-types: [minor, patch]
