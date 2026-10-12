@@ -281,7 +281,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-12 | The snapshot script retries a request once after a timeout or a 502/503/504, then fails the build ([retry policy](api.md#how-it-works)). |
 | 2026-10-12 | Review means the change-set summary shown before publishing. No second approval: an editor may publish their own change set. |
 | 2026-10-12 | The signed-proxy spike is phase 1 work and doesn't block phase 0, which only needs a plain `/api/*` proxy. |
-| 2026-10-12 | Dependabot policy, both repos: weekly on Monday 06:00 Europe/Warsaw, a 7-day cooldown (14 for majors; security updates are not delayed), grouped PRs with peer-linked packages sharing a group so their majors move together, and TypeScript majors ignored until typescript-eslint supports them. Patch and minor PRs auto-merge in the API repo once required checks pass; the frontend merges by hand until it has its own CI. |
+| 2026-10-12 | Dependabot policy, both repos: weekly on Monday 06:00 Europe/Warsaw, a 7-day cooldown (14 for npm majors; security updates are not delayed), grouped PRs with peer-linked packages sharing a group so their majors move together, and TypeScript majors ignored until typescript-eslint supports them. Patch and minor PRs auto-merge in the API repo once required checks pass; the frontend merges by hand until it has its own CI. |
 
 ## Open questions
 
