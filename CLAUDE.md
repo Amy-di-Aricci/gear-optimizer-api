@@ -18,7 +18,7 @@ Cross-repo decisions are recorded only in the decisions log in `docs/overview.md
 ## Rules that are easy to miss
 
 - Public repo: never commit secrets, hook URLs, `.env` files, database dumps or real user data. Fixtures and seeds use public game data and fake users only.
-- Scraping code and notes about pre-release data sources belong in the private scraper repo, not here. This repo only defines and validates the import file format.
+- Scraping code and notes about pre-release data sources belong in the private ops repo (`gear-optimizer-ops`, `scraper/`), not here. This repo only defines and validates the import file format.
 - Every route must declare an access policy (`@Public()`, `@Authenticated()` or `@Roles(...)`); the global guard denies by default and the authorization-matrix test fails otherwise.
 - User-owned data is always scoped by the session's user ID; another user's resource returns 404.
 - Game data changes only through change sets (draft → publish), never by writing live tables directly.

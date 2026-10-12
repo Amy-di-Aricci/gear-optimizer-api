@@ -23,7 +23,7 @@ See `docs/backend-migration.md` in the frontend repo.
 
 ## Data import
 
-Import file validation and the diff engine: see [data-import.md](data-import.md#tests). The private scraper repo has its own tests.
+Import file validation and the diff engine: see [data-import.md](data-import.md#tests). The scraper, in the private ops repo, has its own tests.
 
 ## CI gates (all repos)
 

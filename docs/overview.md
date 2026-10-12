@@ -77,8 +77,7 @@ Each deployed stage (staging, production) has its own copy of every service abov
 | --- | --- | --- |
 | `gear-optimiser` | **Public** | React frontend: the public app and the admin app (`admin/`, a separate build deployed as its own site). Adds `npm run gen:api` (e.g. `@hey-api/openapi-ts` or `orval`); the generated client is committed, so builds don't depend on the backend being up. |
 | `gear-optimizer-api` | **Public** | NestJS + Prisma. CI runs lint, tests (Postgres in a GitHub Actions service container), contract checks (`openapi.json`, import schema), then `prisma migrate deploy` and deploys to Render. |
-| `gear-optimiser-scrapper` | **Private** | Standalone scripts for pre-release data sources. Outputs import files that validate against the API's import schema. It never talks to the API. Its own plan lives in that repo (`docs/plan.md`). |
-| `gear-optimizer-ops` | **Private**, no outside contributions | Planning (all roadmap issues, tracked on a private GitHub Projects board), backup workflows and maintenance tools such as the staging data refresh. Database credentials sit in GitHub environments limited to `main` with owner approval, so write access alone doesn't expose them. Split backups into their own repo only if more people need admin rights here. |
+| `gear-optimizer-ops` | **Private**, no outside contributions | Planning (all roadmap issues, tracked on a private GitHub Projects board); the scraper (`scraper/`: standalone scripts for pre-release data that output import files validating against the API's import schema and upload images to ImageKit, never talking to the API; plan in `scraper/docs/plan.md`); backup workflows and maintenance tools such as the staging data refresh. Database credentials sit in GitHub environments limited to `main` with owner approval, so write access alone doesn't expose them. Split backups into their own repo only if more people need admin rights here. |
 
 - **Contract change workflow:** change the backend DTO → `openapi:export` → commit `openapi.json` → copy it into the frontend (manually at first, later through a bot PR) → `gen:api` → TypeScript errors point out everything that needs updating.
 - **Import format changes:** change the import DTO → regenerate `schemas/import/v1.schema.json` → the private repo copies the new schema from a pinned commit or tag.
@@ -196,7 +195,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 
 ### Phase 2 — Import file format
 - Import DTOs + generated JSON Schema (`schemas/import/v1.schema.json`), validation and the diff engine ([data-import.md](data-import.md)). For now, a CLI script in the API repo runs file → diff report against the database (no change sets yet).
-- Private scraper repo: scripts rewritten around journal instance IDs, with output validated against the schema (tracked in that repo).
+- Scraper (private ops repo): scripts rewritten around journal instance IDs, with output validated against the schema (tracked there).
 - Re-check the current season (imported during PTR) against retail data and fix the differences.
 - **Done when:** a season's data can be produced as one import file that validates, and the diff report matches reality.
 
@@ -250,7 +249,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-08 | Tests: Vitest + real-Postgres integration tests + generated authorization matrix; Playwright for critical flows. |
 | 2026-10-08 | Security baseline: OWASP Top 10 mapping ([security](security.md)), deny-by-default authorization, ASVS L1 review before accounts go live. |
 | 2026-10-08 | BIS lists postponed; threshold of 20 distinct users per spec per season when built. |
-| 2026-10-08 | Frontend and API repos are public; the scraper stays a separate **private** repo. The API only accepts import files (schema committed in the API repo) uploaded by editors; no service token. |
+| 2026-10-08 | Frontend and API repos are public; the scraper stays a separate **private** repo (*moved into the private ops repo on 2026-10-12*). The API only accepts import files (schema committed in the API repo) uploaded by editors; no service token. |
 | 2026-10-08 | Blizzard API import from the admin panel is an optional later feature. |
 | 2026-10-08 | Repos stay on the owner's personal account with collaborators; no GitHub organization for now. |
 | 2026-10-08 | License: AGPL-3.0-only for both public repos, © Sajgonka; covers code and original assets, not Blizzard content. Community-project disclaimer in READMEs and in the app footer. |
@@ -274,7 +273,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-09 | Staging has no access gate: staff-only login plus `noindex`. Revisit if a custom domain is bought (Cloudflare Access). |
 | 2026-10-09 | The API trusts only requests signed by Netlify's signed proxy redirects (`x-nf-sign`), one secret per site; a local build plugin sets each site's proxy target. Details and spike checks in [security](security.md#trusted-proxy). |
 
-| 2026-10-12 | Roadmap tasks live as issues in the private `gear-optimizer-ops` repo on a private GitHub Projects board, not in the public repos. The ops repo also holds backups and maintenance tools. |
+| 2026-10-12 | Roadmap tasks live as issues in the private `gear-optimizer-ops` repo on a private GitHub Projects board, not in the public repos. The ops repo also holds the scraper (`scraper/`), backups and maintenance tools. |
 
 ## Open questions
 
