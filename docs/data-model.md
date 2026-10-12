@@ -23,13 +23,13 @@ erDiagram
 | Table | Columns (main) |
 | --- | --- |
 | `expansion` | `id`, `code` (`MN`, `TWW`), `name`, `image_key`, `slim_image_key`, `sort_order`, `max_level` (character level cap, e.g. 90) |
-| `season` | `id`, `code` (`MNS2`), `expansion_id`, `short_name`, `tier_name`, `image_key`, `starts_at`, `ends_at`, `is_current`, `status` (`ACTIVE` \| `FROZEN`) |
+| `season` | `id`, `code` (`MNS2`), `expansion_id`, `short_name`, `tier_name`, `image_key`, `starts_at`, `ends_at`, `is_current`, `status` (`ACTIVE` \| `FROZEN`), `freeze_at?` (optional scheduled freeze, set by an editor) |
 | `instance` | `id`, `code` (`FLOOD`, `TVA`), `type` (`DUNGEON` \| `RAID`), `name`, `short_name`, `blizzard_journal_id` (unique), `image_key`; unique (`id`, `type`) for the composite keys below |
 | `season_instance` | `season_id`, `instance_id` (PK both) |
 | `raid_boss` | `id`, `instance_id`, `instance_type` (always `RAID`), `code` (`ULGRAX`, unique), `name`, `blizzard_encounter_id` (unique), `sort_order`. (`instance_id`, `instance_type`) → `instance` (`id`, `type`), so a boss can only belong to a raid. |
 | `item_source` | `id`, `type` (`DUNGEON` \| `RAID`), `instance_id?` (unique, dungeons), `raid_boss_id?` (unique, raids). One row per dungeon and per raid boss, created together with it. |
 | `item` | `id` (= Blizzard item ID), `source_id` → `item_source`, `name`, `icon_key`, `slot`, `armor_type?`, `weapon_type?`, `offhand_type?`, `main_stats[]`, `secondary_stats[]`, `roles[]` (trinkets), `special_effect?`, `imported_from` (`PRE_RELEASE` \| `RETAIL` \| `MANUAL`), `source_payload jsonb` (raw import record as received, for debugging; never returned by public endpoints) |
-| `character_class`, `spec` | replaces `globals/specs.ts`: `character_class.name` (unique); `spec.class_id`, `spec.name` (unique per class), `spec.role`, `spec.main_stat`, `spec.weapon_types[]`, `spec.offhand_types[]`; unique (`id`, `class_id`) for the composite keys below |
+| `character_class`, `spec` | replaces `globals/specs.ts`: `character_class.name` (unique), `character_class.blizzard_class_id` (unique, e.g. 11 = Druid); `spec.blizzard_spec_id` (unique, e.g. 102 = Balance), `spec.class_id`, `spec.name` (unique per class), `spec.role`, `spec.main_stat`, `spec.weapon_types[]`, `spec.offhand_types[]`; unique (`id`, `class_id`) for the composite keys below |
 
 Codes (`season.code`, `instance.code`, `raid_boss.code`) are unique and act as stable natural keys: imports and change sets refer to rows by code, never by database ID.
 
@@ -50,7 +50,8 @@ Notes:
 - List columns (`main_stats`, `secondary_stats`, `roles`, …) hold enum values. The API rejects duplicates and an empty `roles` list on trinkets when validating input; the database doesn't check this.
 - Fixed game vocabulary (slots, stats, armor/weapon types, roles) stays as **Postgres enums**. It changes about once per expansion and drives UI logic. Content (seasons, instances, bosses) becomes **rows**. The test for which is which: if a new season needs it, it's a row.
 - Display names and images for dungeons and bosses move into the DB. Today they live in frontend mappers.
-- **Frozen seasons:** when a season ends, an admin sets it to `FROZEN`. Change sets that touch a frozen season (its rotation, or items that only drop in its instances) are rejected. Its data is then cached as immutable ([caching](api.md#caching--cold-starts)). An item that drops from an instance shared with an active season can still be edited.
+- **Blizzard class and spec IDs** let the character sync map Blizzard's answer (`playable_class.id`, `active_spec.id`) to our rows. Without them a synced character has no class or spec to join on.
+- **Frozen seasons:** when a season ends, an editor freezes it with a **Freeze** button. Since Blizzard announces patch dates late, an editor can instead set `freeze_at` by hand once the date is known. Setting, changing or clearing `freeze_at` is an ordinary change set. The daily [scheduled job](api.md#scheduled-jobs) then freezes every season whose `freeze_at` has passed (so up to a day late, which is harmless) and writes an `audit_log` row with no actor. Both paths do the same thing in one transaction: set `FROZEN`, archive the season's wishlists, bump `data_version`, then rebuild the snapshot. A current season can't be frozen, so the editor makes the next season current first. That switch is always a manual action. Change sets that touch a frozen season (its rotation, or items that only drop in its instances) are rejected. Its snapshot file never changes again, so it stays cached forever ([public data delivery](api.md#public-data-delivery-static-snapshot)). An item that drops from an instance shared with an active season can still be edited.
 - The slot enum matches the frontend's `EItemSlot`, where the former `RANGED` slot became `TWOHAND`. `EMiscType` from the old scraper output isn't kept.
 
 ## Editorial / publishing
@@ -59,7 +60,7 @@ Notes:
 | --- | --- |
 | `change_set` | A draft: `id`, `title`, `origin` (`IMPORT` \| `MANUAL`), `status` (`DRAFT` \| `PUBLISHED` \| `DISCARDED`), `base_version` (the `data_version` it was based on), `created_by`, `created_at`, `updated_at`, `resolved_by?`, `resolved_at?` |
 | `change_set_entry` | One proposed change: `change_set_id`, `entity` (`item`, `item_source`, `season`, `season_instance`, …), `entity_key jsonb`, `op` (`CREATE` \| `UPDATE` \| `DELETE`), `before jsonb`, `after jsonb`; unique (`change_set_id`, `entity`, `entity_key`) |
-| `data_version` | A single row (`CHECK (id = 1)`, created by the migration) holding a counter, bumped on every publish. Used as the API's `ETag` and cache key. |
+| `data_version` | A single row (`CHECK (id = 1)`, created by the migration) holding a counter, bumped on every publish. Used for change-set conflict detection (`base_version`), the API's in-memory response cache, and to tell whether the live snapshot is up to date. |
 | `audit_log` | `actor_id?`, `action`, `target`, `payload`, `created_at`. Append-only. |
 
 **Base data + deltas.** Live tables hold the current published state (the base). Each change set is a delta: per row, its `before` and `after`. Published change sets, kept forever, are the history of every change. Reads never replay deltas; they only read the live tables, so public reads stay simple and fast.
@@ -79,7 +80,7 @@ Rules:
 | --- | --- |
 | `app_user` | `id`, `display_name`, `role` (`USER` \| `EDITOR` \| `ADMIN`), `created_at`, `deleted_at?`. Named `app_user` because `user` is reserved in Postgres. |
 | `user_identity` | `id`, `user_id`, `provider` (`BNET` \| `DISCORD` \| `GOOGLE`), `provider_user_id`; unique (`provider`, `provider_user_id`); unique (`id`, `user_id`, `provider`) for the composite key below |
-| `session` | server-side sessions (`id` = **hash** of the session token, `user_id`, `expires_at`). Revocable: a role change or "log out everywhere" takes effect immediately. |
+| `session` | server-side sessions (`id` = **hash** of the session token, `user_id`, `site` (`ADMIN` \| `PUBLIC`: the site it was created on, see [sessions](api.md#mechanics)), `expires_at`). Revocable: a role change or "log out everywhere" takes effect immediately. |
 | `character` | `id`, `user_id`, `identity_id`, `identity_provider` (always `BNET`), `region`, `bnet_character_id`, `realm_slug`, `name`, `level`, `class_id`, `active_spec_id?`, `last_synced_at`; unique (`region`, `bnet_character_id`); unique (`id`, `user_id`) |
 | `wishlist` | `id`, `user_id`, `season_id`, `spec_id` (always set), `character_id?`, `name`, `archived_at?` |
 | `wishlist_item` | `wishlist_id`, `item_id`, `added_at`, `obtained_at?` (PK `wishlist_id` + `item_id`) |
@@ -111,7 +112,7 @@ Wishlists:
 - A wishlist works like a shop wishlist: a flat set of marked items. There's no per-slot limit and no ranking. Several items for the same slot are fine, as is having none for a slot. `obtained_at` lets a user tick items off without deleting them.
 - **Creating a wishlist is always a user action.** Syncing never creates wishlists. From the character list, "New wishlist" pre-fills the current season, the character's active spec and a suggested name. Users without Battle.net create wishlists without a character. A character can have any number of wishlists (e.g. separate raid, M+ and PvP sets).
 - Wishlists are private: every query is scoped to `user_id = currentUser`.
-- A wishlist is tied to one season (`season_id`), and users create new wishlists for new seasons. When a season ends, its wishlists get `archived_at` set and become read-only (still visible to the owner).
+- A wishlist is tied to one season (`season_id`), and users create new wishlists for new seasons. When a season is frozen, its wishlists get `archived_at` set in the same transaction and become read-only (still visible to the owner).
 - Possible later, at a season change: an optional `purpose` (`RAID` \| `MPLUS` \| `PVP` \| `OTHER`) on `wishlist`, so BIS lists can be split by content type. Not planned for now.
 - Email: Battle.net doesn't provide one. Don't store emails from Discord/Google unless a feature needs them (data minimisation, GDPR).
 
@@ -148,7 +149,7 @@ Prisma's schema can't express everything above. Create these migrations with `pr
 
 Nothing in earlier phases depends on this. The wishlist tables above already hold everything it needs.
 
-A `bis_stat` table (or materialized view) holds (`season_id`, `spec_id`, `slot`, `item_id`, `user_count`, `share`). The slot comes from the item. It's refreshed by a GitHub Actions cron calling an authenticated endpoint. It reads only from active wishlists in the current season.
+A `bis_stat` table (or materialized view) holds (`season_id`, `spec_id`, `slot`, `item_id`, `user_count`, `share`). The slot comes from the item. It's refreshed by a [scheduled job](api.md#scheduled-jobs) inside the API. It reads only from active wishlists in the current season.
 
 Rules:
 - Count **distinct users**, not wishlists. Someone with three wishlists for the same spec counts once.

@@ -28,7 +28,8 @@ CREATE TABLE season (
   starts_at    timestamptz,
   ends_at      timestamptz,
   is_current   boolean NOT NULL DEFAULT false,  -- at most one true (partial index below)
-  status       varchar(16) NOT NULL DEFAULT 'ACTIVE'  -- ACTIVE | FROZEN
+  status       varchar(16) NOT NULL DEFAULT 'ACTIVE', -- ACTIVE | FROZEN
+  freeze_at    timestamptz                       -- optional scheduled freeze, set by an editor
 );
 
 CREATE TABLE instance (
@@ -86,12 +87,14 @@ CREATE TABLE item (
 );
 
 CREATE TABLE character_class (
-  id   serial PRIMARY KEY,
-  name varchar(64) NOT NULL UNIQUE
+  id                serial PRIMARY KEY,
+  name              varchar(64) NOT NULL UNIQUE,
+  blizzard_class_id integer NOT NULL UNIQUE            -- Blizzard playable class ID, for character sync
 );
 
 CREATE TABLE spec (
   id            serial PRIMARY KEY,
+  blizzard_spec_id integer NOT NULL UNIQUE,         -- Blizzard playable specialization ID
   class_id      integer NOT NULL REFERENCES character_class (id),
   name          varchar(64) NOT NULL,
   role          varchar(16) NOT NULL,              -- enum
@@ -125,6 +128,7 @@ CREATE TABLE user_identity (
 CREATE TABLE session (
   id         varchar(64) PRIMARY KEY,                -- hash of the session token
   user_id    integer NOT NULL REFERENCES app_user (id),
+  site       varchar(8) NOT NULL,                    -- ADMIN | PUBLIC: site the session was created on
   expires_at timestamptz NOT NULL
 );
 

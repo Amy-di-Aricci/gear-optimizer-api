@@ -43,6 +43,7 @@ erDiagram
     timestamptz ends_at "after starts_at"
     bool is_current "only one true; never FROZEN"
     enum status "ACTIVE | FROZEN"
+    timestamptz freeze_at "optional, set by an editor"
   }
   instance {
     int id PK
@@ -91,9 +92,11 @@ erDiagram
   character_class {
     int id PK
     string name UK
+    int blizzard_class_id UK
   }
   spec {
     int id PK
+    int blizzard_spec_id UK
     int class_id FK "UK (class_id, name)"
     string name
     enum role
@@ -117,6 +120,7 @@ erDiagram
   session {
     string id PK "hash of the token"
     int user_id FK
+    enum site "ADMIN or PUBLIC"
     timestamptz expires_at
   }
   character {

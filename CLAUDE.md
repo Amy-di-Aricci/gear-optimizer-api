@@ -7,9 +7,9 @@ NestJS backend for the gear optimiser (frontend: `gear-optimiser` repo, React + 
 The backend migration plan lives in `docs/`. Read `docs/overview.md` first: it holds goals, architecture, phases, the public-repo rules and the decisions log, and indexes the rest.
 
 - `docs/data-model.md`: PostgreSQL schema
-- `docs/api.md`: endpoints, CDN caching, auth
-- `docs/environments.md`: development (local Postgres), staging, production
-- `docs/data-import.md`: import file format, upload flow, optional Blizzard API import
+- `docs/api.md`: endpoints, public data delivery (static snapshot), auth, privacy, scheduled jobs
+- `docs/environments.md`: development (local Postgres), fully separate staging and production
+- `docs/data-import.md`: import file format, images, upload flow, optional Blizzard API import
 - `docs/security.md`: OWASP-based hardening; applies to every change
 - `docs/testing.md`: testing strategy and CI gates
 
