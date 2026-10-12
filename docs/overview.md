@@ -230,6 +230,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 | Netlify plan limits reached (builds, bandwidth) | Netlify paid plan. Public pages are static, so a traffic surge costs bandwidth, not API capacity. |
 | A job must run on time | Daily wake-up ping, or the paid Render instance ([scheduled jobs](api.md#scheduled-jobs)) |
 | Cold starts annoy logged-in users | Render paid instance (~$7/mo) |
+| Bots hitting the Render address keep the free instance awake and use up its hours (requests without the build token or a proxy signature get a 404, but still wake it) | Render paid instance, or Cloudflare in front of the API (needs a custom domain) |
 | Neon storage/compute limits | Neon paid tier; data is tiny, so this is unlikely to happen soon |
 | Need nicer URLs / own brand | Custom domain (~€10/yr): `app.` on Netlify, `api.` on Render |
 | Need observability | Sentry free tier (frontend + API), Render logs |
