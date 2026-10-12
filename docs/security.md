@@ -1,6 +1,6 @@
 # Security hardening
 
-Status: draft · Last updated: 2026-10-09 · Part of the [backend migration plan](overview.md)
+Status: draft · Last updated: 2026-10-12 · Part of the [backend migration plan](overview.md)
 
 Most valuable data: **user accounts, linked identities, characters and wishlists**, and **editor/admin privileges** (whoever gets them can change what every visitor sees). The checklist below follows the **OWASP Top 10 (2025 edition)**. Check the official list, since category names shifted between editions. For a structured self-review, use **OWASP ASVS Level 1** as the checklist; it's the "what to verify" companion to the Top 10.
 
@@ -15,7 +15,7 @@ Most valuable data: **user accounts, linked identities, characters and wishlists
 | A05 | Injection | SQL injection, XSS through item names or user-entered names | Prisma parameterises queries. **Ban `$queryRawUnsafe` / `$executeRawUnsafe`** with an ESLint rule. React escapes output by default: ban `dangerouslySetInnerHTML` with a lint rule. Strict CSP as the second line of defence. Validate every DTO (`whitelist` + `forbidNonWhitelisted`). |
 | A06 | Insecure Design | Missing limits, abuse of business flows | Rate limits (`@nestjs/throttler`), counted per real client IP ([trusted proxy](#trusted-proxy)): stricter on `/auth/*`, `/admin/imports`, wishlist writes. Size limits: request body (e.g. 100 KB; 5 MB only for import uploads), max wishlists per user, max items per wishlist. Imports can only create drafts, never publish. Import files are validated against the schema before anything is stored. Threat-model each new feature briefly in its PR ("who could abuse this?"). |
 | A07 | Authentication Failures | Session fixation, account takeover via provider linking, stolen editor account | Until phase 4, only staff can log in at all ([login rollout](api.md#login-rollout)). OAuth with `state` + **PKCE**. **Regenerate the session ID on login.** Idle timeout (e.g. 14 days for users, shorter for editors/admins), absolute lifetime. Logout deletes the server-side session. Linking a second provider is only possible **while logged in**, never by matching emails. **Editors/admins must have 2FA on their login provider.** Discord reports `mfa_enabled`, so you can enforce it for elevated roles. Role changes revoke that user's sessions. |
-| A08 | Software or Data Integrity Failures | Unreviewed data reaching production, tampered builds | Change sets + review + audit log. CI deploys only from protected `main`. `prisma migrate deploy` only from CI. Third-party GitHub Actions pinned to a commit SHA. |
+| A08 | Software or Data Integrity Failures | Unreviewed data reaching production, tampered builds | Change sets with a review (diff summary) step before publishing + audit log. CI deploys only from protected `main`. `prisma migrate deploy` only from CI. Third-party GitHub Actions pinned to a commit SHA. |
 | A09 | Logging & Alerting Failures | Not noticing an attack or a broken publish | Structured logs (`nestjs-pino`) with request IDs. Log logins, failed authorisations (403s), role changes, publishes, imports, account deletions. **Never log** tokens, cookies, session IDs or full request bodies (pino `redact`). Sentry (free) for errors, a free uptime monitor for `/api/health`, alerts to the team. |
 | A10 | Mishandling of Exceptional Conditions | Errors leaking internals; partial writes; failing open | Global exception filter: generic error body + request ID in production. Transactions for multi-step writes. Guards **fail closed**: if the session store or DB is unreachable, deny. |
 
@@ -25,7 +25,7 @@ The browser reaches the API only through the Netlify proxy (`/api/*`), but the R
 
 **Why it matters:** rate limits count requests per client IP address. Behind a proxy, every request arrives from Netlify's address, so the API would treat all visitors as one. The real address comes in a header the proxy adds, but anyone calling Render directly can write any address into that header and dodge the limits. Direct calls also skip the security headers set on Netlify.
 
-**Rule:** the API accepts a request only if it can prove it came through one of the stage's Netlify sites (public or admin), and only then reads the client IP from Netlify's header.
+**Rule:** the API accepts a request only if it can prove it came through one of the stage's Netlify sites (public or admin), and only then reads the client IP from Netlify's header. Two exceptions, both read-only: `GET /api/health`, and the public game-data endpoints called by the snapshot build with a build token (see [snapshot build token](#snapshot-build-token) below).
 - **Mechanism: Netlify signed proxy redirects** (checked against Netlify's docs on 2026-10-09).
   - A proxy rule with `signed = "API_SIGNATURE_TOKEN"` makes Netlify add an `x-nf-sign` header to every proxied request: a JWS (HMAC HS256) signed with the secret held in that environment variable. The variable lives in the site's settings, never in the repo, and its scope must include **Runtime**.
   - The signed payload contains `deploy_context`, `exp` (expiry), `iss: "netlify"`, `netlify_id` (the site ID) and `site_url`. The API verifies the signature and expiry, and maps `netlify_id` to "public site" or "admin site" from its own configuration. Anything else gets a 404.
@@ -35,11 +35,45 @@ The browser reaches the API only through the Netlify proxy (`/api/*`), but the R
 - **Still to confirm in the phase 1 spike:**
   - that a plugin-added rule keeps `signed`, with a test deploy against a tiny echo endpoint;
   - which header carries the client IP to the API (Netlify's docs don't say; expected `x-nf-client-connection-ip` and `X-Forwarded-For`), and that the signed request can't be given a different one;
-  - the 26-second proxy timeout, against Render cold starts.
+  - the 26-second proxy timeout, against Render cold starts;
+  - that Render's proxy **appends** the caller's address as the last `X-Forwarded-For` entry on direct requests (rather than passing the client's header through unchanged), so the [direct-request limit](#direct-requests-per-ip-limits) can rely on it.
   
   Fallback if the plugin route fails: one committed `netlify.toml` per site, in separate base directories. The Render hostnames aren't secrets.
 - `GET /api/health` stays reachable directly, for Render's health check.
 - Public pages read the [static snapshot](api.md#public-data-delivery-static-snapshot) and don't touch the API, so this protects login, admin and user routes, which is where rate limits matter.
+- **Development and tests.** The Vite dev servers proxy `/api` to the local API without a signature, so the check is off when `APP_ENV=development`. A deployed build must set `APP_ENV` to `staging` or `production` or it refuses to start ([environments](environments.md)), so the check can't be switched off by accident there. Tests sign their requests with a test secret, so the check itself stays covered.
+
+### Snapshot build token
+
+The snapshot script runs inside the Netlify build and calls the stage's API directly at `API_ORIGIN` ([public data delivery](api.md#public-data-delivery-static-snapshot)), not through a site's proxy, so its requests carry no `x-nf-sign` header. Instead of opening the public game-data endpoints to everyone, the build proves who it is with a **build token**:
+
+- **What it unlocks:** only `GET /api/meta`, `/api/expansions`, `/api/seasons`, `/api/seasons/:code`, `/api/seasons/:code/items` and `/api/specs`. These accept **either** a valid proxy signature (the admin panel, later the public site) **or** a valid build token. Every other route ignores the token. A request with neither gets a 404, like any unsigned request.
+- **One token per stage**, a random value of at least 32 bytes from a CSPRNG. Only the public sites run the snapshot script, so the admin sites don't get one.
+- **Netlify side:** a secret environment variable `SNAPSHOT_TOKEN` (marked *secret*, so Netlify masks it in build logs), scoped to **Builds** only (not Functions or Runtime), and never a `VITE_*` variable, so it can't end up in the bundle. On the production site, it's set for the production deploy context only. Deploy previews build against staging ([environments](environments.md)) with the staging token. Keep the site's *sensitive variable policy* for deploy previews from forks on **Require approval**, so an outside PR can't read the token.
+- **API side:** the API stores only a SHA-256 hash of the token (`SNAPSHOT_TOKEN_HASH`) and compares hashes in constant time. The `Authorization` header is redacted from logs ([A09](#owasp-top-10--this-project)).
+- **Rotation without downtime:** the API accepts a list of hashes, so a new token is added to the API first, then swapped in Netlify, then the old hash is removed. Rotate whenever someone with access to the site settings leaves, or if the token may have leaked.
+- **Rate limit:** see [direct requests](#direct-requests-per-ip-limits) below. A leaked token gives read access to public data and nothing more; rotate it.
+- `GET /api/health` stays open without either, for Render's health check.
+
+### Direct requests: per-IP limits
+
+Requests that reach Render directly (no valid proxy signature: bots, scanners, the snapshot build) are rate-limited **per IP** too, so one address firing many requests in a short time gets `429` instead of using up the API.
+
+- **Which IP:** the **last** entry of `X-Forwarded-For`, which Render's own proxy appends with the address it received the connection from. Everything before it was written by the caller and is ignored. In Express terms, `trust proxy` is set to exactly one hop for direct requests. Requests with a valid Netlify signature keep using Netlify's client-IP header instead (the last `X-Forwarded-For` entry there is Netlify's own address).
+- **Limits:** a tight per-IP limit for direct requests, since no real visitor calls Render directly, plus one small shared bucket for requests with a valid build token. The build fetches a handful of files, so it never comes close.
+- The check runs before any other work, and requests without the token or a signature get a 404 anyway. So a blocked or rejected request costs almost nothing, but it still **wakes the free instance**. Stopping traffic before it reaches Render needs an edge layer (Cloudflare) or the paid instance ([scaling triggers](overview.md#later--scaling-triggers)).
+- Render has no per-IP rate-limit setting of its own to configure, so this lives in the API.
+
+Alternatives considered:
+
+| Option | Why not |
+| --- | --- |
+| Leave the public reads open to anyone | Works, and the data is public anyway, but it lets anyone wake the API and use Render hours. Rejected in favour of the token. |
+| Allowlist Netlify's build IP addresses | Netlify builds don't use fixed, published outbound IPs (static IPs are an Enterprise feature), and the free Render service has no inbound firewall. |
+| Fetch through the live site's signed `/api/*` proxy | Fails for a brand-new site that has no deploy yet, and ties each build to the previous deploy's proxy configuration. |
+| Short-lived signed token minted per build (JWT) | Needs the same long-lived secret on Netlify to sign it, so it adds code without removing a secret. |
+| Mutual TLS from the build | Not supported on Render's free tier or by Netlify's build environment. |
+| The API pushes the snapshot instead of the build pulling it | Needs extra storage or a commit into the frontend repo; much more moving parts for the same result. |
 
 ## Third-party scripts
 

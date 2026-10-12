@@ -1,6 +1,6 @@
 # Backend migration plan: overview
 
-Status: draft · Last updated: 2026-10-09
+Status: draft · Last updated: 2026-10-12
 
 This is the entry point. Cross-repo decisions, phases and the decisions log live **only here**; the other documents hold the details for one area.
 
@@ -18,7 +18,7 @@ This is the entry point. Cross-repo decisions, phases and the decisions log live
 ## Goals
 
 - Move game data (items, loot sources, dungeons, raids, seasons, expansions, specs) out of the frontend bundle into a database, so content can be updated **without a frontend deploy**.
-- A small trusted team (≈3 people) maintains data through an admin panel, with a **draft → review → publish** flow.
+- A small trusted team (≈3 people) maintains data through an admin panel, with a **draft → review → publish** flow (review is a summary of the change set shown before publishing; an editor may publish their own changes).
 - Data enters through **import files** uploaded in the admin panel (produced by a separate, private tool), an optional **Blizzard API import** for retail data, and manual edits.
 - Older seasons stay browsable.
 - Later: user accounts (Battle.net / Discord / Google), private per-season wishlists, and BIS lists aggregated from wishlists.
@@ -108,6 +108,7 @@ Both the frontend and the API repo are public. Two goals: **nothing sensitive is
 - the Render deploy hook URL,
 - the Netlify build hook URL,
 - the proxy signing secret ([security](security.md#trusted-proxy)),
+- the snapshot build token ([security](security.md#snapshot-build-token)),
 - backup encryption keys.
 
 Hook URLs count as secrets: anyone who has one can trigger deploys.
@@ -180,7 +181,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 - Finish the `gear-optimizer-api` scaffold (NestJS app already generated): add Prisma, health endpoint, Swagger in dev, CI, deployed to Render, Netlify `/api` proxy working.
 - Three stages ([environments.md](environments.md)): local Postgres for development, staging and production that share nothing but code, with CI deploying `main` to staging, then to production after approval.
 - Testing & security baseline in CI for both public repos: Vitest set up, lint + typecheck, `npm audit`, gitleaks, Semgrep, CodeQL, Dependabot, branch protection.
-- **Done when:** `https://<site>.netlify.app/api/health` returns OK.
+- **Done when:** `https://<site>.netlify.app/api/health` returns OK. A plain (unsigned) `/api/*` proxy rule is enough here; the signed proxy and its build plugin come from the phase 1 spike and don't block phase 0.
 
 ### Phase 1 — Read-only data API
 - Prisma schema for [game data model](data-model.md#game-data). Seed script that imports today's `gear-store.json`, `manual_items.ts`, `globals/*.ts` (one-off migration). Verify counts match: ~900 items.
@@ -229,6 +230,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 | Netlify plan limits reached (builds, bandwidth) | Netlify paid plan. Public pages are static, so a traffic surge costs bandwidth, not API capacity. |
 | A job must run on time | Daily wake-up ping, or the paid Render instance ([scheduled jobs](api.md#scheduled-jobs)) |
 | Cold starts annoy logged-in users | Render paid instance (~$7/mo) |
+| Bots hitting the Render address keep the free instance awake and use up its hours (requests without the build token or a proxy signature get a 404, but still wake it) | Render paid instance, or Cloudflare in front of the API (needs a custom domain) |
 | Neon storage/compute limits | Neon paid tier; data is tiny, so this is unlikely to happen soon |
 | Need nicer URLs / own brand | Custom domain (~€10/yr): `app.` on Netlify, `api.` on Render |
 | Need observability | Sentry free tier (frontend + API), Render logs |
@@ -249,7 +251,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-08 | Tests: Vitest + real-Postgres integration tests + generated authorization matrix; Playwright for critical flows. |
 | 2026-10-08 | Security baseline: OWASP Top 10 mapping ([security](security.md)), deny-by-default authorization, ASVS L1 review before accounts go live. |
 | 2026-10-08 | BIS lists postponed; threshold of 20 distinct users per spec per season when built. |
-| 2026-10-08 | Frontend and API repos are public; the scraper stays a separate **private** repo (*moved into the private ops repo on 2026-10-12*). The API only accepts import files (schema committed in the API repo) uploaded by editors; no service token. |
+| 2026-10-08 | Frontend and API repos are public; the scraper stays a separate **private** repo (*moved into the private ops repo on 2026-10-12*). The API only accepts import files (schema committed in the API repo) uploaded by editors; no service token for imports (*a read-only snapshot build token was added on 2026-10-12*). |
 | 2026-10-08 | Blizzard API import from the admin panel is an optional later feature. |
 | 2026-10-08 | Repos stay on the owner's personal account with collaborators; no GitHub organization for now. |
 | 2026-10-08 | License: AGPL-3.0-only for both public repos, © Sajgonka; covers code and original assets, not Blizzard content. Community-project disclaimer in READMEs and in the app footer. |
@@ -271,10 +273,14 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-09 | TanStack Query for frontend data fetching and the persisted cache. |
 | 2026-10-09 | Seasons are frozen by an editor: a Freeze button, or a `freeze_at` date the editor sets by hand, which the daily job applies. Making a season current is always manual. ([frozen seasons](data-model.md#game-data)) |
 | 2026-10-09 | Staging has no access gate: staff-only login plus `noindex`. Revisit if a custom domain is bought (Cloudflare Access). |
-| 2026-10-09 | The API trusts only requests signed by Netlify's signed proxy redirects (`x-nf-sign`), one secret per site; a local build plugin sets each site's proxy target. Details and spike checks in [security](security.md#trusted-proxy). |
-
+| 2026-10-09 | The API trusts only requests signed by Netlify's signed proxy redirects (`x-nf-sign`), one secret per site; a local build plugin sets each site's proxy target. Details and spike checks in [security](security.md#trusted-proxy). *Public game-data reads are exempt (2026-10-12).* |
 | 2026-10-12 | Roadmap tasks live as issues in the private `gear-optimizer-ops` repo on a private GitHub Projects board, not in the public repos. The ops repo also holds the scraper (`scraper/`), backups and maintenance tools. |
 | 2026-10-12 | The API repo went public after its first commit's email was rewritten to the noreply address. Both public repos protect `main` with a ruleset (no deletion or force push, PRs required, 0 approvals; the API also requires its CI checks). The ops repo stays on the free plan: repository secrets, a read-only backup role, write access only for the owner and partner. |
+| 2026-10-12 | The snapshot build calls the API directly with a per-stage **build token** (a Netlify build-only secret; the API keeps only its hash). The token unlocks only the public game-data reads; every other route still requires the proxy signature. The signature check is off in development. This is the only service token; imports still need an editor session. ([snapshot build token](security.md#snapshot-build-token)) |
+| 2026-10-12 | Direct requests to Render (no proxy signature) are rate-limited per IP, using the last `X-Forwarded-For` entry, which Render's proxy appends; proxied requests use Netlify's client-IP header. ([direct requests](security.md#direct-requests-per-ip-limits)) |
+| 2026-10-12 | The snapshot script retries a request once after a timeout or a 502/503/504, then fails the build ([retry policy](api.md#how-it-works)). |
+| 2026-10-12 | Review means the change-set summary shown before publishing. No second approval: an editor may publish their own change set. |
+| 2026-10-12 | The signed-proxy spike is phase 1 work and doesn't block phase 0, which only needs a plain `/api/*` proxy. |
 
 ## Open questions
 

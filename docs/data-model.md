@@ -1,6 +1,6 @@
 # Data model (PostgreSQL)
 
-Status: draft · Last updated: 2026-10-09 · Part of the [backend migration plan](overview.md)
+Status: draft · Last updated: 2026-10-12 · Part of the [backend migration plan](overview.md)
 
 Full diagram with all columns: [diagrams/schema.mmd](diagrams/schema.mmd) (Mermaid). The exact constraint SQL (`CHECK`s, composite keys, partial index, delete rules) is in [diagrams/schema.sql](diagrams/schema.sql), which also imports into DrawSQL / dbdiagram.io; use it when writing the Prisma migrations. This document and both files are the source of truth until the Prisma schema and migrations exist; keep them in sync.
 
@@ -65,7 +65,7 @@ Notes:
 
 **Base data + deltas.** Live tables hold the current published state (the base). Each change set is a delta: per row, its `before` and `after`. Published change sets, kept forever, are the history of every change. Reads never replay deltas; they only read the live tables, so public reads stay simple and fast.
 
-Flow: an import (file upload or Blizzard API job, see [data-import.md](data-import.md)) or an editor's manual edit creates a change set → the admin UI shows a diff (new, changed and removed items) → an editor publishes → **all entries are applied in one transaction** → `data_version++` → audit entry written.
+Flow: an import (file upload or Blizzard API job, see [data-import.md](data-import.md)) or an editor's manual edit creates a change set → the admin UI shows a diff (new, changed and removed items) → **review**: the editor checks a summary of the change set, like the summary step of a form → an editor publishes (the author may publish their own change set; no second approval is required) → **all entries are applied in one transaction** → `data_version++` → audit entry written.
 
 Rules:
 - **`entity_key` uses natural keys**, not database IDs: `{"id": 268283}` for an item (its Blizzard ID), `{"code": "MNS2"}` for a season, `{"season": "MNS2", "instance": "FLOOD"}` for a `season_instance` row. That covers composite keys and rows that don't exist yet (a `CREATE` has no database ID). The unique constraint means a change set holds at most one entry per row: a second edit to the same row updates the existing entry instead of adding one.

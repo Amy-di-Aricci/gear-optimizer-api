@@ -1,6 +1,6 @@
 # Environments
 
-Status: draft · Last updated: 2026-10-09 · Part of the [backend migration plan](overview.md)
+Status: draft · Last updated: 2026-10-12 · Part of the [backend migration plan](overview.md)
 
 Three stages. **Only the code is shared.** Each deployed stage has its own accounts or projects on every service, its own secrets and its own data, so a mistake in one stage can't reach the other.
 
@@ -66,10 +66,10 @@ Set up once per stage. The names match `render.yaml` and the workflows.
 
 **Neon:** one project per stage, in Frankfurt. In each project, two roles: a **migration** role that owns the schema, and an **app** role with read/write on tables but no DDL ([least privilege](security.md#also-important)).
 
-**Render:** one workspace per stage, each with one service. On each service, set `DATABASE_URL` to the app role's connection string, plus that stage's other secrets as they arrive (Netlify build hook URL, proxy signing secret, session secret, OAuth secrets). Keep auto-deploy off. Suspend the staging service while nobody is testing, so it uses no hours.
+**Render:** one workspace per stage, each with one service. On each service, set `DATABASE_URL` to the app role's connection string, plus that stage's other secrets as they arrive (Netlify build hook URL, proxy signing secret, `SNAPSHOT_TOKEN_HASH`, session secret, OAuth secrets). Keep auto-deploy off. Suspend the staging service while nobody is testing, so it uses no hours.
 - `render.yaml` still defines both services in one Blueprint. Split it into one Blueprint per stage when the workspaces are separated.
 
-**Netlify (frontend repo):** two sites per stage, public and admin, so four in total. Each has its own `API_ORIGIN` and proxy signing secret; the public site also has the build hook that rebuilds the snapshot. Details: the frontend's `docs/backend-migration.md`.
+**Netlify (frontend repo):** two sites per stage, public and admin, so four in total. Each has its own `API_ORIGIN` and proxy signing secret; the public site also has the build hook that rebuilds the snapshot and the `SNAPSHOT_TOKEN` its build uses to read the API ([snapshot build token](security.md#snapshot-build-token)). Details: the frontend's `docs/backend-migration.md`.
 
 **ImageKit:** one account per stage. The import tool uploads images to the stage it targets ([data import](data-import.md#images)).
 
