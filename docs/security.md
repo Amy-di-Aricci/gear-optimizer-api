@@ -35,7 +35,8 @@ The browser reaches the API only through the Netlify proxy (`/api/*`), but the R
 - **Still to confirm in the phase 1 spike:**
   - that a plugin-added rule keeps `signed`, with a test deploy against a tiny echo endpoint;
   - which header carries the client IP to the API (Netlify's docs don't say; expected `x-nf-client-connection-ip` and `X-Forwarded-For`), and that the signed request can't be given a different one;
-  - the 26-second proxy timeout, against Render cold starts.
+  - the 26-second proxy timeout, against Render cold starts;
+  - that Render's proxy **appends** the caller's address as the last `X-Forwarded-For` entry on direct requests (rather than passing the client's header through unchanged), so the [direct-request limit](#direct-requests-per-ip-limits) can rely on it.
   
   Fallback if the plugin route fails: one committed `netlify.toml` per site, in separate base directories. The Render hostnames aren't secrets.
 - `GET /api/health` stays reachable directly, for Render's health check.
@@ -51,8 +52,17 @@ The snapshot script runs inside the Netlify build and calls the stage's API dire
 - **Netlify side:** a secret environment variable `SNAPSHOT_TOKEN` (marked *secret*, so Netlify masks it in build logs), scoped to **Builds** only (not Functions or Runtime), and never a `VITE_*` variable, so it can't end up in the bundle. On the production site, it's set for the production deploy context only. Deploy previews build against staging ([environments](environments.md)) with the staging token. Keep the site's *sensitive variable policy* for deploy previews from forks on **Require approval**, so an outside PR can't read the token.
 - **API side:** the API stores only a SHA-256 hash of the token (`SNAPSHOT_TOKEN_HASH`) and compares hashes in constant time. The `Authorization` header is redacted from logs ([A09](#owasp-top-10--this-project)).
 - **Rotation without downtime:** the API accepts a list of hashes, so a new token is added to the API first, then swapped in Netlify, then the old hash is removed. Rotate whenever someone with access to the site settings leaves, or if the token may have leaked.
-- **Rate limit:** build requests have no trustworthy client IP, so they share one small rate-limit bucket. A leaked token gives read access to public data and nothing more; rotate it.
+- **Rate limit:** see [direct requests](#direct-requests-per-ip-limits) below. A leaked token gives read access to public data and nothing more; rotate it.
 - `GET /api/health` stays open without either, for Render's health check.
+
+### Direct requests: per-IP limits
+
+Requests that reach Render directly (no valid proxy signature: bots, scanners, the snapshot build) are rate-limited **per IP** too, so one address firing many requests in a short time gets `429` instead of using up the API.
+
+- **Which IP:** the **last** entry of `X-Forwarded-For`, which Render's own proxy appends with the address it received the connection from. Everything before it was written by the caller and is ignored. In Express terms, `trust proxy` is set to exactly one hop for direct requests. Requests with a valid Netlify signature keep using Netlify's client-IP header instead (the last `X-Forwarded-For` entry there is Netlify's own address).
+- **Limits:** a tight per-IP limit for direct requests, since no real visitor calls Render directly, plus one small shared bucket for requests with a valid build token. The build fetches a handful of files, so it never comes close.
+- The check runs before any other work, and requests without the token or a signature get a 404 anyway. So a blocked or rejected request costs almost nothing, but it still **wakes the free instance**. Stopping traffic before it reaches Render needs an edge layer (Cloudflare) or the paid instance ([scaling triggers](overview.md#later--scaling-triggers)).
+- Render has no per-IP rate-limit setting of its own to configure, so this lives in the API.
 
 Alternatives considered:
 
