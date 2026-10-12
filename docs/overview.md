@@ -78,6 +78,7 @@ Each deployed stage (staging, production) has its own copy of every service abov
 | `gear-optimiser` | **Public** | React frontend: the public app and the admin app (`admin/`, a separate build deployed as its own site). Adds `npm run gen:api` (e.g. `@hey-api/openapi-ts` or `orval`); the generated client is committed, so builds don't depend on the backend being up. |
 | `gear-optimizer-api` | **Public** | NestJS + Prisma. CI runs lint, tests (Postgres in a GitHub Actions service container), contract checks (`openapi.json`, import schema), then `prisma migrate deploy` and deploys to Render. |
 | `gear-optimiser-scrapper` | **Private** | Standalone scripts for pre-release data sources. Outputs import files that validate against the API's import schema. It never talks to the API. Its own plan lives in that repo (`docs/plan.md`). |
+| `gear-optimizer-ops` | **Private** | Planning (all roadmap issues, tracked on a private GitHub Projects board), backup workflows and maintenance tools such as the staging data refresh. |
 
 - **Contract change workflow:** change the backend DTO → `openapi:export` → commit `openapi.json` → copy it into the frontend (manually at first, later through a bot PR) → `gen:api` → TypeScript errors point out everything that needs updating.
 - **Import format changes:** change the import DTO → regenerate `schemas/import/v1.schema.json` → the private repo copies the new schema from a pinned commit or tag.
@@ -91,6 +92,7 @@ Three people: you (owner), your partner (code + editor), and a third person (edi
 - **Branch protection on `main`** in both public repos: changes go through PRs, and CI must pass. Every developer runs a local PostgreSQL and a local API ([environments](environments.md#development-local-postgresql)).
 - **Onboarding docs** in each repo's README: local setup, how to run migrations and seed data, how to export the spec and regenerate clients, how to deploy. For the future maintainer, the [decisions log](#decisions-log) records *why* things are the way they are; add a row for every cross-repo decision.
 - App roles are independent of repo access: the third person gets `EDITOR` in the app without needing GitHub access.
+- **Planning is private:** tasks are issues in `gear-optimizer-ops`, on a private GitHub Projects board (Status, Phase, Area, Target fields). PRs in the public repos close them with `Closes Amy-di-Aricci/gear-optimizer-ops#N`. People who only plan or track get the **Triage** role there, which lets them manage issues but not push code or workflows, so they can't reach the repo's secrets.
 
 ## Public repositories
 
@@ -271,6 +273,8 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-09 | Seasons are frozen by an editor: a Freeze button, or a `freeze_at` date the editor sets by hand, which the daily job applies. Making a season current is always manual. ([frozen seasons](data-model.md#game-data)) |
 | 2026-10-09 | Staging has no access gate: staff-only login plus `noindex`. Revisit if a custom domain is bought (Cloudflare Access). |
 | 2026-10-09 | The API trusts only requests signed by Netlify's signed proxy redirects (`x-nf-sign`), one secret per site; a local build plugin sets each site's proxy target. Details and spike checks in [security](security.md#trusted-proxy). |
+
+| 2026-10-12 | Roadmap tasks live as issues in the private `gear-optimizer-ops` repo on a private GitHub Projects board, not in the public repos. The ops repo also holds backups and maintenance tools. |
 
 ## Open questions
 
