@@ -1,6 +1,6 @@
 # Backend migration plan: overview
 
-Status: draft · Last updated: 2026-10-09
+Status: draft · Last updated: 2026-10-12
 
 This is the entry point. Cross-repo decisions, phases and the decisions log live **only here**; the other documents hold the details for one area.
 
@@ -18,7 +18,7 @@ This is the entry point. Cross-repo decisions, phases and the decisions log live
 ## Goals
 
 - Move game data (items, loot sources, dungeons, raids, seasons, expansions, specs) out of the frontend bundle into a database, so content can be updated **without a frontend deploy**.
-- A small trusted team (≈3 people) maintains data through an admin panel, with a **draft → review → publish** flow.
+- A small trusted team (≈3 people) maintains data through an admin panel, with a **draft → review → publish** flow (review is a summary of the change set shown before publishing; an editor may publish their own changes).
 - Data enters through **import files** uploaded in the admin panel (produced by a separate, private tool), an optional **Blizzard API import** for retail data, and manual edits.
 - Older seasons stay browsable.
 - Later: user accounts (Battle.net / Discord / Google), private per-season wishlists, and BIS lists aggregated from wishlists.
@@ -180,7 +180,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 - Finish the `gear-optimizer-api` scaffold (NestJS app already generated): add Prisma, health endpoint, Swagger in dev, CI, deployed to Render, Netlify `/api` proxy working.
 - Three stages ([environments.md](environments.md)): local Postgres for development, staging and production that share nothing but code, with CI deploying `main` to staging, then to production after approval.
 - Testing & security baseline in CI for both public repos: Vitest set up, lint + typecheck, `npm audit`, gitleaks, Semgrep, CodeQL, Dependabot, branch protection.
-- **Done when:** `https://<site>.netlify.app/api/health` returns OK.
+- **Done when:** `https://<site>.netlify.app/api/health` returns OK. A plain (unsigned) `/api/*` proxy rule is enough here; the signed proxy and its build plugin come from the phase 1 spike and don't block phase 0.
 
 ### Phase 1 — Read-only data API
 - Prisma schema for [game data model](data-model.md#game-data). Seed script that imports today's `gear-store.json`, `manual_items.ts`, `globals/*.ts` (one-off migration). Verify counts match: ~900 items.
@@ -271,10 +271,13 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-09 | TanStack Query for frontend data fetching and the persisted cache. |
 | 2026-10-09 | Seasons are frozen by an editor: a Freeze button, or a `freeze_at` date the editor sets by hand, which the daily job applies. Making a season current is always manual. ([frozen seasons](data-model.md#game-data)) |
 | 2026-10-09 | Staging has no access gate: staff-only login plus `noindex`. Revisit if a custom domain is bought (Cloudflare Access). |
-| 2026-10-09 | The API trusts only requests signed by Netlify's signed proxy redirects (`x-nf-sign`), one secret per site; a local build plugin sets each site's proxy target. Details and spike checks in [security](security.md#trusted-proxy). |
-
+| 2026-10-09 | The API trusts only requests signed by Netlify's signed proxy redirects (`x-nf-sign`), one secret per site; a local build plugin sets each site's proxy target. Details and spike checks in [security](security.md#trusted-proxy). *Public game-data reads are exempt (2026-10-12).* |
 | 2026-10-12 | Roadmap tasks live as issues in the private `gear-optimizer-ops` repo on a private GitHub Projects board, not in the public repos. The ops repo also holds the scraper (`scraper/`), backups and maintenance tools. |
 | 2026-10-12 | The API repo went public after its first commit's email was rewritten to the noreply address. Both public repos protect `main` with a ruleset (no deletion or force push, PRs required, 0 approvals; the API also requires its CI checks). The ops repo stays on the free plan: repository secrets, a read-only backup role, write access only for the owner and partner. |
+| 2026-10-12 | The public game-data endpoints accept unsigned requests, so the snapshot build can call the API directly; unsigned requests share one global rate-limit bucket. Every other route still requires the proxy signature. The signature check is off in development. ([unsigned public reads](security.md#unsigned-public-reads)) |
+| 2026-10-12 | The snapshot script retries a request once after a timeout or a 502/503/504, then fails the build ([retry policy](api.md#how-it-works)). |
+| 2026-10-12 | Review means the change-set summary shown before publishing. No second approval: an editor may publish their own change set. |
+| 2026-10-12 | The signed-proxy spike is phase 1 work and doesn't block phase 0, which only needs a plain `/api/*` proxy. |
 
 ## Open questions
 

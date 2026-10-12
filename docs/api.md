@@ -1,6 +1,6 @@
 # API
 
-Status: draft · Last updated: 2026-10-09 · Part of the [backend migration plan](overview.md)
+Status: draft · Last updated: 2026-10-12 · Part of the [backend migration plan](overview.md)
 
 ## API outline
 
@@ -61,7 +61,9 @@ Postgres stays the source of truth, and the admin panel always reads and writes 
    `<hash>` is a hash of the file's contents, so a file's name changes **only when its contents change**.
 3. Netlify deploys the site with these files. Visitors download them from the CDN like any other static asset.
 
-A code deploy runs the same build, so data and code always ship together. If the API can't be reached during a build, the build fails and the previous deploy stays live.
+A code deploy runs the same build, so data and code always ship together. The script calls the API directly, without a proxy signature; the public endpoints accept that ([unsigned public reads](security.md#unsigned-public-reads)).
+
+**Retry policy.** The API may be asleep when a build starts (Render cold start). Every request the script makes has a timeout (60 s). On a timeout, or a `502`/`503`/`504`, it retries that request **once**. If the retry fails too, the build fails and the previous deploy stays live; an editor can start it again with **Rebuild** once the API is back ([keeping the live site in step](#keeping-the-live-site-in-step-with-the-database)). The same applies to code deploys: while the API is down, a code deploy fails instead of shipping without data.
 
 ### Cache headers (`public/_headers` in the frontend)
 

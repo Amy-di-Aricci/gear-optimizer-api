@@ -1,6 +1,6 @@
 # Security hardening
 
-Status: draft · Last updated: 2026-10-09 · Part of the [backend migration plan](overview.md)
+Status: draft · Last updated: 2026-10-12 · Part of the [backend migration plan](overview.md)
 
 Most valuable data: **user accounts, linked identities, characters and wishlists**, and **editor/admin privileges** (whoever gets them can change what every visitor sees). The checklist below follows the **OWASP Top 10 (2025 edition)**. Check the official list, since category names shifted between editions. For a structured self-review, use **OWASP ASVS Level 1** as the checklist; it's the "what to verify" companion to the Top 10.
 
@@ -15,7 +15,7 @@ Most valuable data: **user accounts, linked identities, characters and wishlists
 | A05 | Injection | SQL injection, XSS through item names or user-entered names | Prisma parameterises queries. **Ban `$queryRawUnsafe` / `$executeRawUnsafe`** with an ESLint rule. React escapes output by default: ban `dangerouslySetInnerHTML` with a lint rule. Strict CSP as the second line of defence. Validate every DTO (`whitelist` + `forbidNonWhitelisted`). |
 | A06 | Insecure Design | Missing limits, abuse of business flows | Rate limits (`@nestjs/throttler`), counted per real client IP ([trusted proxy](#trusted-proxy)): stricter on `/auth/*`, `/admin/imports`, wishlist writes. Size limits: request body (e.g. 100 KB; 5 MB only for import uploads), max wishlists per user, max items per wishlist. Imports can only create drafts, never publish. Import files are validated against the schema before anything is stored. Threat-model each new feature briefly in its PR ("who could abuse this?"). |
 | A07 | Authentication Failures | Session fixation, account takeover via provider linking, stolen editor account | Until phase 4, only staff can log in at all ([login rollout](api.md#login-rollout)). OAuth with `state` + **PKCE**. **Regenerate the session ID on login.** Idle timeout (e.g. 14 days for users, shorter for editors/admins), absolute lifetime. Logout deletes the server-side session. Linking a second provider is only possible **while logged in**, never by matching emails. **Editors/admins must have 2FA on their login provider.** Discord reports `mfa_enabled`, so you can enforce it for elevated roles. Role changes revoke that user's sessions. |
-| A08 | Software or Data Integrity Failures | Unreviewed data reaching production, tampered builds | Change sets + review + audit log. CI deploys only from protected `main`. `prisma migrate deploy` only from CI. Third-party GitHub Actions pinned to a commit SHA. |
+| A08 | Software or Data Integrity Failures | Unreviewed data reaching production, tampered builds | Change sets with a review (diff summary) step before publishing + audit log. CI deploys only from protected `main`. `prisma migrate deploy` only from CI. Third-party GitHub Actions pinned to a commit SHA. |
 | A09 | Logging & Alerting Failures | Not noticing an attack or a broken publish | Structured logs (`nestjs-pino`) with request IDs. Log logins, failed authorisations (403s), role changes, publishes, imports, account deletions. **Never log** tokens, cookies, session IDs or full request bodies (pino `redact`). Sentry (free) for errors, a free uptime monitor for `/api/health`, alerts to the team. |
 | A10 | Mishandling of Exceptional Conditions | Errors leaking internals; partial writes; failing open | Global exception filter: generic error body + request ID in production. Transactions for multi-step writes. Guards **fail closed**: if the session store or DB is unreachable, deny. |
 
@@ -25,7 +25,7 @@ The browser reaches the API only through the Netlify proxy (`/api/*`), but the R
 
 **Why it matters:** rate limits count requests per client IP address. Behind a proxy, every request arrives from Netlify's address, so the API would treat all visitors as one. The real address comes in a header the proxy adds, but anyone calling Render directly can write any address into that header and dodge the limits. Direct calls also skip the security headers set on Netlify.
 
-**Rule:** the API accepts a request only if it can prove it came through one of the stage's Netlify sites (public or admin), and only then reads the client IP from Netlify's header.
+**Rule:** the API accepts a request only if it can prove it came through one of the stage's Netlify sites (public or admin), and only then reads the client IP from Netlify's header. Two exceptions, both read-only: `GET /api/health` and the public game-data endpoints (see [unsigned public reads](#unsigned-public-reads) below).
 - **Mechanism: Netlify signed proxy redirects** (checked against Netlify's docs on 2026-10-09).
   - A proxy rule with `signed = "API_SIGNATURE_TOKEN"` makes Netlify add an `x-nf-sign` header to every proxied request: a JWS (HMAC HS256) signed with the secret held in that environment variable. The variable lives in the site's settings, never in the repo, and its scope must include **Runtime**.
   - The signed payload contains `deploy_context`, `exp` (expiry), `iss: "netlify"`, `netlify_id` (the site ID) and `site_url`. The API verifies the signature and expiry, and maps `netlify_id` to "public site" or "admin site" from its own configuration. Anything else gets a 404.
@@ -40,6 +40,18 @@ The browser reaches the API only through the Netlify proxy (`/api/*`), but the R
   Fallback if the plugin route fails: one committed `netlify.toml` per site, in separate base directories. The Render hostnames aren't secrets.
 - `GET /api/health` stays reachable directly, for Render's health check.
 - Public pages read the [static snapshot](api.md#public-data-delivery-static-snapshot) and don't touch the API, so this protects login, admin and user routes, which is where rate limits matter.
+- **Development and tests.** The Vite dev servers proxy `/api` to the local API without a signature, so the check is off when `APP_ENV=development`. A deployed build must set `APP_ENV` to `staging` or `production` or it refuses to start ([environments](environments.md)), so the check can't be switched off by accident there. Tests sign their requests with a test secret, so the check itself stays covered.
+
+### Unsigned public reads
+
+The snapshot script runs inside the Netlify build and calls the stage's API directly at `API_ORIGIN` ([public data delivery](api.md#public-data-delivery-static-snapshot)), not through a site's proxy, so its requests carry no `x-nf-sign` header. The public game-data endpoints therefore accept unsigned requests:
+
+- Only `GET /api/meta`, `/api/expansions`, `/api/seasons`, `/api/seasons/:code`, `/api/seasons/:code/items` and `/api/specs`. They are `@Public()`, read-only, and return only published game data that is in the public snapshot anyway.
+- They are served from the in-memory cache keyed by `data_version`, so repeated calls don't query the database.
+- An unsigned request has no trustworthy client IP, so unsigned requests share **one global rate-limit bucket** instead of being counted per IP. A flood can slow the snapshot build down, but it can't reach anything beyond public data, and spoofing an IP header doesn't help.
+- Every other route (`/api/auth/*`, `/api/me/*`, `/api/admin/*`) still requires a valid signature, and gets a 404 without one.
+
+Alternatives considered: fetching through the live site's signed `/api/*` proxy (fails for a brand-new site that has no deploy yet, and ties the build to the previous deploy), and a separate build token (one more secret per site for data that is public anyway).
 
 ## Third-party scripts
 
