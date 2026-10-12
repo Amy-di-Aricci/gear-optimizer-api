@@ -131,7 +131,7 @@ Hook URLs count as secrets: anyone who has one can trigger deploys.
 - The frontend history already contains personal email addresses (yours and another contributor's). If that matters to you, rewriting history (`git filter-repo --mailmap`) only helps if nobody else has cloned the repo yet. Otherwise, apply the noreply rule from now on.
 
 **Private material stays private:**
-- Scraping code, PTR-source notes and raw scraped dumps live only in the private scraper repo.
+- Scraping code, PTR-source notes and raw scraped dumps live only in the private ops repo (`gear-optimizer-ops`, `scraper/`).
 - Public docs describe only the import file format.
 
 **CI on public repos:**
