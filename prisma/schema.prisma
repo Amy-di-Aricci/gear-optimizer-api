@@ -1,0 +1,12 @@
+// Prisma schema. Game data models arrive in phase 1 (see docs/data-model.md).
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "cjs"
+  importFileExtension = ""
+}
+
+datasource db {
+  provider = "postgresql"
+}
