@@ -1,9 +1,13 @@
 version: 2
 updates:
+  # Cooldown: new releases are proposed only after 7 days, so a compromised
+  # release is usually caught and pulled before it reaches a PR.
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     groups:
       nestjs:
@@ -18,3 +22,5 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7

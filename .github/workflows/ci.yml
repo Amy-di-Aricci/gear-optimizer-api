@@ -75,14 +75,15 @@ jobs:
 
   # main -> staging -> production (docs/environments.md). Each stage is off
   # until its repository variable is set to 'true'; production also waits for
-  # the reviewers configured on the `production` environment.
+  # the reviewers configured on the `production` environment. No secrets are
+  # passed: the deploy job runs in the stage's GitHub environment and reads
+  # that environment's secrets directly.
   deploy-staging:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Amy-di-Aricci/gear-optimizer-api' && vars.STAGING_DEPLOY_ENABLED == 'true'
     needs: [checks, database]
     uses: ./.github/workflows/deploy.yml
     with:
       environment: staging
-    secrets: inherit
 
   deploy-production:
     if: vars.PRODUCTION_DEPLOY_ENABLED == 'true'
@@ -90,4 +91,3 @@ jobs:
     uses: ./.github/workflows/deploy.yml
     with:
       environment: production
-    secrets: inherit
