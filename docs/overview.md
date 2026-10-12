@@ -108,6 +108,7 @@ Both the frontend and the API repo are public. Two goals: **nothing sensitive is
 - the Render deploy hook URL,
 - the Netlify build hook URL,
 - the proxy signing secret ([security](security.md#trusted-proxy)),
+- the snapshot build token ([security](security.md#snapshot-build-token)),
 - backup encryption keys.
 
 Hook URLs count as secrets: anyone who has one can trigger deploys.
@@ -249,7 +250,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-08 | Tests: Vitest + real-Postgres integration tests + generated authorization matrix; Playwright for critical flows. |
 | 2026-10-08 | Security baseline: OWASP Top 10 mapping ([security](security.md)), deny-by-default authorization, ASVS L1 review before accounts go live. |
 | 2026-10-08 | BIS lists postponed; threshold of 20 distinct users per spec per season when built. |
-| 2026-10-08 | Frontend and API repos are public; the scraper stays a separate **private** repo (*moved into the private ops repo on 2026-10-12*). The API only accepts import files (schema committed in the API repo) uploaded by editors; no service token. |
+| 2026-10-08 | Frontend and API repos are public; the scraper stays a separate **private** repo (*moved into the private ops repo on 2026-10-12*). The API only accepts import files (schema committed in the API repo) uploaded by editors; no service token for imports (*a read-only snapshot build token was added on 2026-10-12*). |
 | 2026-10-08 | Blizzard API import from the admin panel is an optional later feature. |
 | 2026-10-08 | Repos stay on the owner's personal account with collaborators; no GitHub organization for now. |
 | 2026-10-08 | License: AGPL-3.0-only for both public repos, © Sajgonka; covers code and original assets, not Blizzard content. Community-project disclaimer in READMEs and in the app footer. |
@@ -274,7 +275,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-09 | The API trusts only requests signed by Netlify's signed proxy redirects (`x-nf-sign`), one secret per site; a local build plugin sets each site's proxy target. Details and spike checks in [security](security.md#trusted-proxy). *Public game-data reads are exempt (2026-10-12).* |
 | 2026-10-12 | Roadmap tasks live as issues in the private `gear-optimizer-ops` repo on a private GitHub Projects board, not in the public repos. The ops repo also holds the scraper (`scraper/`), backups and maintenance tools. |
 | 2026-10-12 | The API repo went public after its first commit's email was rewritten to the noreply address. Both public repos protect `main` with a ruleset (no deletion or force push, PRs required, 0 approvals; the API also requires its CI checks). The ops repo stays on the free plan: repository secrets, a read-only backup role, write access only for the owner and partner. |
-| 2026-10-12 | The public game-data endpoints accept unsigned requests, so the snapshot build can call the API directly; unsigned requests share one global rate-limit bucket. Every other route still requires the proxy signature. The signature check is off in development. ([unsigned public reads](security.md#unsigned-public-reads)) |
+| 2026-10-12 | The snapshot build calls the API directly with a per-stage **build token** (a Netlify build-only secret; the API keeps only its hash). The token unlocks only the public game-data reads; every other route still requires the proxy signature. The signature check is off in development. This is the only service token; imports still need an editor session. ([snapshot build token](security.md#snapshot-build-token)) |
 | 2026-10-12 | The snapshot script retries a request once after a timeout or a 502/503/504, then fails the build ([retry policy](api.md#how-it-works)). |
 | 2026-10-12 | Review means the change-set summary shown before publishing. No second approval: an editor may publish their own change set. |
 | 2026-10-12 | The signed-proxy spike is phase 1 work and doesn't block phase 0, which only needs a plain `/api/*` proxy. |

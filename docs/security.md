@@ -25,7 +25,7 @@ The browser reaches the API only through the Netlify proxy (`/api/*`), but the R
 
 **Why it matters:** rate limits count requests per client IP address. Behind a proxy, every request arrives from Netlify's address, so the API would treat all visitors as one. The real address comes in a header the proxy adds, but anyone calling Render directly can write any address into that header and dodge the limits. Direct calls also skip the security headers set on Netlify.
 
-**Rule:** the API accepts a request only if it can prove it came through one of the stage's Netlify sites (public or admin), and only then reads the client IP from Netlify's header. Two exceptions, both read-only: `GET /api/health` and the public game-data endpoints (see [unsigned public reads](#unsigned-public-reads) below).
+**Rule:** the API accepts a request only if it can prove it came through one of the stage's Netlify sites (public or admin), and only then reads the client IP from Netlify's header. Two exceptions, both read-only: `GET /api/health`, and the public game-data endpoints called by the snapshot build with a build token (see [snapshot build token](#snapshot-build-token) below).
 - **Mechanism: Netlify signed proxy redirects** (checked against Netlify's docs on 2026-10-09).
   - A proxy rule with `signed = "API_SIGNATURE_TOKEN"` makes Netlify add an `x-nf-sign` header to every proxied request: a JWS (HMAC HS256) signed with the secret held in that environment variable. The variable lives in the site's settings, never in the repo, and its scope must include **Runtime**.
   - The signed payload contains `deploy_context`, `exp` (expiry), `iss: "netlify"`, `netlify_id` (the site ID) and `site_url`. The API verifies the signature and expiry, and maps `netlify_id` to "public site" or "admin site" from its own configuration. Anything else gets a 404.
@@ -42,16 +42,28 @@ The browser reaches the API only through the Netlify proxy (`/api/*`), but the R
 - Public pages read the [static snapshot](api.md#public-data-delivery-static-snapshot) and don't touch the API, so this protects login, admin and user routes, which is where rate limits matter.
 - **Development and tests.** The Vite dev servers proxy `/api` to the local API without a signature, so the check is off when `APP_ENV=development`. A deployed build must set `APP_ENV` to `staging` or `production` or it refuses to start ([environments](environments.md)), so the check can't be switched off by accident there. Tests sign their requests with a test secret, so the check itself stays covered.
 
-### Unsigned public reads
+### Snapshot build token
 
-The snapshot script runs inside the Netlify build and calls the stage's API directly at `API_ORIGIN` ([public data delivery](api.md#public-data-delivery-static-snapshot)), not through a site's proxy, so its requests carry no `x-nf-sign` header. The public game-data endpoints therefore accept unsigned requests:
+The snapshot script runs inside the Netlify build and calls the stage's API directly at `API_ORIGIN` ([public data delivery](api.md#public-data-delivery-static-snapshot)), not through a site's proxy, so its requests carry no `x-nf-sign` header. Instead of opening the public game-data endpoints to everyone, the build proves who it is with a **build token**:
 
-- Only `GET /api/meta`, `/api/expansions`, `/api/seasons`, `/api/seasons/:code`, `/api/seasons/:code/items` and `/api/specs`. They are `@Public()`, read-only, and return only published game data that is in the public snapshot anyway.
-- They are served from the in-memory cache keyed by `data_version`, so repeated calls don't query the database.
-- An unsigned request has no trustworthy client IP, so unsigned requests share **one global rate-limit bucket** instead of being counted per IP. A flood can slow the snapshot build down, but it can't reach anything beyond public data, and spoofing an IP header doesn't help.
-- Every other route (`/api/auth/*`, `/api/me/*`, `/api/admin/*`) still requires a valid signature, and gets a 404 without one.
+- **What it unlocks:** only `GET /api/meta`, `/api/expansions`, `/api/seasons`, `/api/seasons/:code`, `/api/seasons/:code/items` and `/api/specs`. These accept **either** a valid proxy signature (the admin panel, later the public site) **or** a valid build token. Every other route ignores the token. A request with neither gets a 404, like any unsigned request.
+- **One token per stage**, a random value of at least 32 bytes from a CSPRNG. Only the public sites run the snapshot script, so the admin sites don't get one.
+- **Netlify side:** a secret environment variable `SNAPSHOT_TOKEN` (marked *secret*, so Netlify masks it in build logs), scoped to **Builds** only (not Functions or Runtime), and never a `VITE_*` variable, so it can't end up in the bundle. On the production site, it's set for the production deploy context only. Deploy previews build against staging ([environments](environments.md)) with the staging token. Keep the site's *sensitive variable policy* for deploy previews from forks on **Require approval**, so an outside PR can't read the token.
+- **API side:** the API stores only a SHA-256 hash of the token (`SNAPSHOT_TOKEN_HASH`) and compares hashes in constant time. The `Authorization` header is redacted from logs ([A09](#owasp-top-10--this-project)).
+- **Rotation without downtime:** the API accepts a list of hashes, so a new token is added to the API first, then swapped in Netlify, then the old hash is removed. Rotate whenever someone with access to the site settings leaves, or if the token may have leaked.
+- **Rate limit:** build requests have no trustworthy client IP, so they share one small rate-limit bucket. A leaked token gives read access to public data and nothing more; rotate it.
+- `GET /api/health` stays open without either, for Render's health check.
 
-Alternatives considered: fetching through the live site's signed `/api/*` proxy (fails for a brand-new site that has no deploy yet, and ties the build to the previous deploy), and a separate build token (one more secret per site for data that is public anyway).
+Alternatives considered:
+
+| Option | Why not |
+| --- | --- |
+| Leave the public reads open to anyone | Works, and the data is public anyway, but it lets anyone wake the API and use Render hours. Rejected in favour of the token. |
+| Allowlist Netlify's build IP addresses | Netlify builds don't use fixed, published outbound IPs (static IPs are an Enterprise feature), and the free Render service has no inbound firewall. |
+| Fetch through the live site's signed `/api/*` proxy | Fails for a brand-new site that has no deploy yet, and ties each build to the previous deploy's proxy configuration. |
+| Short-lived signed token minted per build (JWT) | Needs the same long-lived secret on Netlify to sign it, so it adds code without removing a secret. |
+| Mutual TLS from the build | Not supported on Render's free tier or by Netlify's build environment. |
+| The API pushes the snapshot instead of the build pulling it | Needs extra storage or a commit into the frontend repo; much more moving parts for the same result. |
 
 ## Third-party scripts
 
