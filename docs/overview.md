@@ -88,7 +88,7 @@ Three people: you (owner), your partner (code + editor), and a third person (edi
 
 - **Repos stay on your personal GitHub account**, with the others as **collaborators**. A GitHub organization remains an option later if ownership needs to be shared or handed over.
 - **Service accounts** (Neon, Render, Netlify, ImageKit, OAuth apps; one set per stage): keep a short list of who has access to what, and keep the credentials in a password manager. Make sure at least one other person could recover access in an emergency.
-- **Branch protection on `main`** in both public repos: changes go through PRs, and CI must pass. Every developer runs a local PostgreSQL and a local API ([environments](environments.md#development-local-postgresql)).
+- **Branch protection on `main` and `deploy`** in both public repos: changes go through PRs, and CI must pass. Task work goes into `main` (staging); releases are PRs from `main` into `deploy` (production) ([release flow](environments.md#release-flow)). Every developer runs a local PostgreSQL and a local API ([environments](environments.md#development-local-postgresql)).
 - **Onboarding docs** in each repo's README: local setup, how to run migrations and seed data, how to export the spec and regenerate clients, how to deploy. For the future maintainer, the [decisions log](#decisions-log) records *why* things are the way they are; add a row for every cross-repo decision.
 - App roles are independent of repo access: the third person gets `EDITOR` in the app without needing GitHub access.
 - **Planning is private:** tasks are issues in `gear-optimizer-ops`, on a private GitHub Projects board (Status, Phase, Area, Target fields). PRs in the public repos close them with `Closes Amy-di-Aricci/gear-optimizer-ops#N`. People who only plan or track get the **Triage** role there, which lets them manage issues but not push code or workflows, so they can't reach the repo's secrets.
@@ -137,7 +137,7 @@ Hook URLs count as secrets: anyone who has one can trigger deploys.
 **CI on public repos:**
 - Pull requests from forks don't receive secrets. Keep it that way: never combine `pull_request_target` with a checkout of PR code.
 - Require approval before workflows run for first-time contributors (repo setting).
-- Deploy jobs run only on pushes to `main`.
+- Deploy jobs run only on pushes to `main` (staging) and `deploy` (production).
 - Every workflow declares minimal `permissions:`.
 - Third-party actions are pinned to a commit SHA.
 
@@ -179,7 +179,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 - Scraper: `git init`, housekeeping, push to a **private** repo (see its `docs/plan.md`).
 - Create Neon (Frankfurt) and Render accounts, separately for staging and production. Register OAuth apps later, in phase 3.
 - Finish the `gear-optimizer-api` scaffold (NestJS app already generated): add Prisma, health endpoint, Swagger in dev, CI, deployed to Render, Netlify `/api` proxy working.
-- Three stages ([environments.md](environments.md)): local Postgres for development, staging and production that share nothing but code, with CI deploying `main` to staging, then to production after approval.
+- Three stages ([environments.md](environments.md)): local Postgres for development, staging and production that share nothing but code, with CI deploying `main` to staging and `deploy` to production after approval.
 - Testing & security baseline in CI for both public repos: Vitest set up, lint + typecheck, `npm audit`, gitleaks, Semgrep, CodeQL, Dependabot, branch protection.
 - **Done when:** `https://<site>.netlify.app/api/health` returns OK. A plain (unsigned) `/api/*` proxy rule is enough here; the signed proxy and its build plugin come from the phase 1 spike and don't block phase 0.
 
@@ -282,6 +282,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-12 | Review means the change-set summary shown before publishing. No second approval: an editor may publish their own change set. |
 | 2026-10-12 | The signed-proxy spike is phase 1 work and doesn't block phase 0, which only needs a plain `/api/*` proxy. |
 | 2026-10-12 | Dependabot policy, both repos: weekly on Monday 06:00 Europe/Warsaw, a 7-day cooldown (14 for npm majors; security updates are not delayed), grouped PRs with peer-linked packages sharing a group so their majors move together, and TypeScript majors ignored until typescript-eslint supports them. Patch and minor PRs auto-merge in the API repo once required checks pass; the frontend merges by hand until it has its own CI. |
+| 2026-10-13 | Branching, both repos: task PRs go into `main`, which deploys to staging; a `deploy` branch deploys to production, and a release is a PR from `main` into `deploy` (merge commit). No `develop` or `staging` branch. Chosen over `develop` + `main` because the default branch, Dependabot (whose security updates always target the default branch) and CodeQL stay on `main`. |
 
 ## Open questions
 

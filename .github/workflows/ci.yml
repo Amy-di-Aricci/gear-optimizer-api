@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, deploy]
 
 permissions:
   contents: read
@@ -73,11 +73,12 @@ jobs:
         run: npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
       - run: npm run test:e2e
 
-  # main -> staging -> production (docs/environments.md). Each stage is off
-  # until its repository variable is set to 'true'; production also waits for
-  # the reviewers configured on the `production` environment. No secrets are
-  # passed: the deploy job runs in the stage's GitHub environment and reads
-  # that environment's secrets directly.
+  # main -> staging, deploy -> production (docs/environments.md). A release
+  # is a PR from main into deploy. Each stage is off until its repository
+  # variable is set to 'true'; production also waits for the reviewers
+  # configured on the `production` environment. No secrets are passed: the
+  # deploy job runs in the stage's GitHub environment and reads that
+  # environment's secrets directly.
   deploy-staging:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'Amy-di-Aricci/gear-optimizer-api' && vars.STAGING_DEPLOY_ENABLED == 'true'
     needs: [checks, database]
@@ -86,8 +87,8 @@ jobs:
       environment: staging
 
   deploy-production:
-    if: vars.PRODUCTION_DEPLOY_ENABLED == 'true'
-    needs: [deploy-staging]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/deploy' && github.repository == 'Amy-di-Aricci/gear-optimizer-api' && vars.PRODUCTION_DEPLOY_ENABLED == 'true'
+    needs: [checks, database]
     uses: ./.github/workflows/deploy.yml
     with:
       environment: production
