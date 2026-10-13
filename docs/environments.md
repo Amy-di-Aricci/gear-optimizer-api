@@ -89,6 +89,7 @@ Two long-lived branches in both repos: **`main`** is where task work lands and w
 1. Task PRs go into `main`. Merging one runs CI → migrations + deploy to **staging** (later: Playwright e2e against staging, ZAP baseline). Netlify's staging sites build `main`.
 2. When staging looks right, open a PR from `main` into `deploy`. Its diff is the release notes. Merge it with a **merge commit**, never squash, so the two branches don't diverge.
 3. The push to `deploy` runs CI → reviewer approves → migrations + deploy to **production**. Netlify's production sites build `deploy`.
+4. The push to `deploy` also tags the released commit `vYYYY.MM.DD` (`.2`, `.3` for later releases that day) and creates a GitHub Release with notes generated from the merged PRs (`.github/workflows/release.yml`, in both repos). Versions name releases; they aren't semver. Release the API before the frontend: the frontend's CI compares its `openapi.json` with the API's on the same branch.
 4. When a frontend change needs a new endpoint, release the API first.
 
 Only PRs from `main` go into `deploy` (by convention; GitHub can't enforce the source branch). **Hotfix:** normally fix on `main` and release again. Only if `main` holds work that can't ship yet, branch from `deploy`, PR into `deploy`, then merge `deploy` back into `main`.
