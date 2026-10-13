@@ -1,0 +1,42 @@
+name: Release
+
+# Every push to `deploy` is a release (release flow: docs/environments.md). Tags the released
+# commit vYYYY.MM.DD (a second release that day gets .2, .3, ...) and creates
+# a GitHub Release whose notes list the PRs merged since the previous one.
+# Versions are names for releases, not semver promises.
+on:
+  push:
+    branches: [deploy]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag and publish release
+    if: github.repository == 'Amy-di-Aricci/gear-optimizer-api'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          existing=$(gh api "repos/$REPO/tags?per_page=100" --jq ".[] | select(.commit.sha == \"$SHA\") | .name" | head -n1)
+          if [ -n "$existing" ]; then
+            echo "::notice::$SHA is already released as $existing."
+            exit 0
+          fi
+          base="v$(date -u +%Y.%m.%d)"
+          tag="$base"
+          n=2
+          while gh api "repos/$REPO/git/ref/tags/$tag" --silent 2>/dev/null; do
+            tag="$base.$n"
+            n=$((n + 1))
+          done
+          gh release create "$tag" --repo "$REPO" --target "$SHA" --title "$tag" --generate-notes
