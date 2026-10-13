@@ -66,7 +66,7 @@ CI fails if the committed file is out of date.
 
 ## Deployment
 
-Pushes to `main` run CI, then deploy to **staging** and, after a reviewer approves, to **production**. Each stage is off until its repository variable is set. See [docs/environments.md](docs/environments.md#staging-and-production) for the setup and [`render.yaml`](render.yaml) for the Render services.
+Task work goes into `main`, which deploys to **staging**. A release is a pull request from `main` into `deploy`; merging it deploys to **production** after a reviewer approves. Each stage is off until its repository variable is set. See [docs/environments.md](docs/environments.md#staging-and-production) for the setup and [`render.yaml`](render.yaml) for the Render services.
 
 ## Contributing
 

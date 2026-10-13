@@ -27,6 +27,6 @@ Import file validation and the diff engine: see [data-import.md](data-import.md#
 
 ## CI gates (all repos)
 
-PR → lint + typecheck + unit + integration (+ authz matrix) + contract check + security scans ([security](security.md)) → merge. `main` → deploy to staging → Playwright e2e → deploy to production (start with a manual approval step for production).
+PR → lint + typecheck + unit + integration (+ authz matrix) + contract check + security scans ([security](security.md)) → merge. `main` → deploy to staging → Playwright e2e. Release PR `main` → `deploy` → deploy to production (with a manual approval step for production).
 
 Playwright on staging logs in as a fake user: before the run, CI inserts that user and a session into the staging database (using the migration role it already has) and starts the browser with the session cookie. The app has no test-only login code, so there's nothing to misconfigure in production.

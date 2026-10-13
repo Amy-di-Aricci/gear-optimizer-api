@@ -9,7 +9,7 @@ Three stages. **Only the code is shared.** Each deployed stage has its own accou
 | Purpose | Local work | Test features and integrations on real infrastructure before going live | The live site |
 | API | `npm run start:dev` on your machine | Render service `gear-optimizer-api-staging` in its own Render workspace (Frankfurt, free) | Render service `gear-optimizer-api` in its own Render workspace (Frankfurt, free) |
 | Database | Local PostgreSQL: `gear_optimizer_dev` (+ `gear_optimizer_test` for tests) | Neon project `gear-optimizer-staging` | Neon project `gear-optimizer` |
-| Frontend | Vite dev servers (public and admin apps), proxying `/api` to `localhost:3000` | Two Netlify sites, public and admin (deploy the `staging` branch), proxying `/api` to the staging service | Two Netlify sites, public and admin (deploy `main`), proxying `/api` to the production service |
+| Frontend | Vite dev servers (public and admin apps), proxying `/api` to `localhost:3000` | Two Netlify sites, public and admin (deploy `main`), proxying `/api` to the staging service | Two Netlify sites, public and admin (deploy `deploy`), proxying `/api` to the production service |
 | Images | Production's public ImageKit URLs (read-only) | ImageKit account for staging | ImageKit account for production |
 | OAuth apps | Development apps (callback on `localhost`) | Staging apps (callback on the staging site) | Production apps |
 | Users | Seeded fake users | Staff accounts of the staging app plus fake test users | Real users |
@@ -17,7 +17,7 @@ Three stages. **Only the code is shared.** Each deployed stage has its own accou
 | `APP_ENV` | `development` | `staging` | `production` |
 | Config from | `.env` / `.env.test` (gitignored) | Render dashboard + GitHub environment `staging` | Render dashboard + GitHub environment `production` |
 | Swagger UI | `/api/docs` | off | off |
-| Deployed by | — | CI, on every push to `main` | CI, after staging, with a required reviewer |
+| Deployed by | — | CI, on every push to `main` | CI, on every push to `deploy` (a release), with a required reviewer |
 
 `NODE_ENV` says how the code runs and `APP_ENV` says where. Staging runs `NODE_ENV=production`, so it exercises exactly the production code paths; only its data and secrets differ. A deployed build must set `APP_ENV` to `staging` or `production`, or it refuses to start.
 
@@ -79,12 +79,21 @@ Set up once per stage. The names match `render.yaml` and the workflows.
 - Environments `staging` and `production`, each with secrets:
   - `MIGRATION_DATABASE_URL`: the migration role's URL for that stage;
   - `RENDER_DEPLOY_HOOK_URL`: that stage's Render deploy hook (a secret, see [public repositories](overview.md#no-leaks)).
-- On `production`: a required reviewer, and deployments limited to the `main` branch.
+- On `production`: a required reviewer, and deployments limited to the `deploy` branch.
 - Repository variables `STAGING_DEPLOY_ENABLED=true` and, once production is set up, `PRODUCTION_DEPLOY_ENABLED=true`.
 
 ### Release flow
 
-Push to `main` → CI passes → migrations + deploy to **staging** → (later: Playwright e2e against staging, ZAP baseline) → reviewer approves → migrations + deploy to **production**.
+Two long-lived branches in both repos: **`main`** is where task work lands and what staging runs; **`deploy`** is what production runs.
+
+1. Task PRs go into `main`. Merging one runs CI → migrations + deploy to **staging** (later: Playwright e2e against staging, ZAP baseline). Netlify's staging sites build `main`.
+2. When staging looks right, open a PR from `main` into `deploy`. Its diff is the release notes. Merge it with a **merge commit**, never squash, so the two branches don't diverge.
+3. The push to `deploy` runs CI → reviewer approves → migrations + deploy to **production**. Netlify's production sites build `deploy`.
+4. When a frontend change needs a new endpoint, release the API first.
+
+Only PRs from `main` go into `deploy` (by convention; GitHub can't enforce the source branch). **Hotfix:** normally fix on `main` and release again. Only if `main` holds work that can't ship yet, branch from `deploy`, PR into `deploy`, then merge `deploy` back into `main`.
+
+Dependabot targets `main` like any task PR, so updates reach production with the next release.
 
 Migrations run against each stage from CI only, never from a laptop.
 

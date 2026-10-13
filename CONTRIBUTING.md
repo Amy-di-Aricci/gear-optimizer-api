@@ -10,8 +10,9 @@ By contributing you agree that your contribution is licensed under the project's
 
 1. Branch from `main` (`feature/…`, `fix/…`, `docs/…`).
 2. Keep commits focused, with an imperative subject line ("Add health endpoint").
-3. Open a pull request and fill in the template. CI must pass before merging; `main` is protected.
-4. Use your GitHub **noreply** email for commits (`git config user.email <id>+<user>@users.noreply.github.com`).
+3. Open a pull request into `main` and fill in the template. CI must pass before merging; `main` is protected.
+4. `main` deploys to staging. Production deploys from the `deploy` branch, which only receives release pull requests from `main` ([release flow](docs/environments.md#release-flow)).
+5. Use your GitHub **noreply** email for commits (`git config user.email <id>+<user>@users.noreply.github.com`).
 
 ## Before you push
 
