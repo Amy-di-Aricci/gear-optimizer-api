@@ -79,7 +79,7 @@ Each deployed stage (staging, production) has its own copy of every service abov
 | `gear-optimizer-api` | **Public** | NestJS + Prisma. CI runs lint, tests (Postgres in a GitHub Actions service container), contract checks (`openapi.json`, import schema), then `prisma migrate deploy` and deploys to Render. |
 | `gear-optimizer-ops` | **Private**, no outside contributions | Planning (all roadmap issues, tracked on a private GitHub Projects board); the scraper (`scraper/`: standalone scripts for pre-release data that output import files validating against the API's import schema and upload images to ImageKit, never talking to the API; plan in `scraper/docs/plan.md`); backup workflows and maintenance tools such as the staging data refresh. On the free plan a private repo has no environment secrets or branch protection, so anyone with write access could read the workflow secrets: write access stays with the owner and partner, and the backup credential is a **read-only** database role. Split backups into their own repo if more people ever need write access here. |
 
-- **Contract change workflow:** change the backend DTO → `openapi:export` → commit `openapi.json` → copy it into the frontend (manually at first, later through a bot PR) → `gen:api` → TypeScript errors point out everything that needs updating.
+- **Contract change workflow:** change the backend DTO → `openapi:export` → commit `openapi.json` → copy it into the frontend (manually at first, later through a bot PR) → `gen:api` → TypeScript errors point out everything that needs updating. The frontend's CI fails while its `openapi.json` differs from the API's on the same branch (`main` or `deploy`).
 - **Import format changes:** change the import DTO → regenerate `schemas/import/v1.schema.json` → the private repo copies the new schema from a pinned commit or tag.
 
 ### Team & access
@@ -283,6 +283,7 @@ Each phase ships something usable on its own. You can stop after any of them.
 | 2026-10-12 | The signed-proxy spike is phase 1 work and doesn't block phase 0, which only needs a plain `/api/*` proxy. |
 | 2026-10-12 | Dependabot policy, both repos: weekly on Monday 06:00 Europe/Warsaw, a 7-day cooldown (14 for npm majors; security updates are not delayed), grouped PRs with peer-linked packages sharing a group so their majors move together, and TypeScript majors ignored until typescript-eslint supports them. Patch and minor PRs auto-merge in the API repo once required checks pass; the frontend merges by hand until it has its own CI. |
 | 2026-10-13 | Branching, both repos: task PRs go into `main`, which deploys to staging; a `deploy` branch deploys to production, and a release is a PR from `main` into `deploy` (merge commit). No `develop` or `staging` branch. Chosen over `develop` + `main` because the default branch, Dependabot (whose security updates always target the default branch) and CodeQL stay on `main`. |
+| 2026-10-13 | Versioning, both repos: every push to `deploy` is tagged `vYYYY.MM.DD` with a GitHub Release and generated notes; no semver, changelog files or `package.json` bumps. Frontend/API alignment is enforced by the contract, not by version numbers: the frontend's CI checks its `openapi.json` against the API's on the matching branch, so the API is released first. API changes stay backward compatible (expand, then contract). |
 
 ## Open questions
 
