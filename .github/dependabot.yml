@@ -19,8 +19,13 @@ updates:
       prefix-development: 'chore(deps-dev)'
     ignore:
       # typescript-eslint supports TypeScript <6.1 only; revisit when it
-      # supports the next major.
+      # supports the next minor or major.
       - dependency-name: typescript
+        update-types:
+          ['version-update:semver-major', 'version-update:semver-minor']
+      # Node typings follow the runtime major in .node-version; bump them
+      # together with it.
+      - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']
     # A dependency joins the first group it matches. Packages that peer on each
     # other share a group of every update type, so their majors move together.
