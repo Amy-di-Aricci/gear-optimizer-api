@@ -73,7 +73,7 @@ CREATE TABLE item (
   id              integer PRIMARY KEY,               -- = Blizzard item ID
   source_id       integer NOT NULL REFERENCES item_source (id),  -- exactly one source
   name            varchar(255) NOT NULL,
-  icon_key        varchar(255),
+  img_id          varchar(255),                      -- ImageKit key, = item ID
   slot            varchar(32) NOT NULL,              -- EItemSlot (no RANGED; TWOHAND instead)
   armor_type      varchar(16),                       -- CLOTH | LEATHER | MAIL | PLATE
   weapon_type     varchar(32),                       -- EWeaponType

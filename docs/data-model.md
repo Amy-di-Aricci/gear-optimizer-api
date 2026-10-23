@@ -28,7 +28,7 @@ erDiagram
 | `season_instance` | `season_id`, `instance_id` (PK both) |
 | `raid_boss` | `id`, `instance_id`, `instance_type` (always `RAID`), `code` (`ULGRAX`, unique), `name`, `blizzard_encounter_id` (unique), `sort_order`. (`instance_id`, `instance_type`) → `instance` (`id`, `type`), so a boss can only belong to a raid. |
 | `item_source` | `id`, `type` (`DUNGEON` \| `RAID`), `instance_id?` (unique, dungeons), `raid_boss_id?` (unique, raids). One row per dungeon and per raid boss, created together with it. |
-| `item` | `id` (= Blizzard item ID), `source_id` → `item_source`, `name`, `icon_key`, `slot`, `armor_type?`, `weapon_type?`, `offhand_type?`, `main_stats[]`, `secondary_stats[]`, `roles[]` (trinkets), `special_effect?`, `imported_from` (`PRE_RELEASE` \| `RETAIL` \| `MANUAL`), `source_payload jsonb` (raw import record as received, for debugging; never returned by public endpoints) |
+| `item` | `id` (= Blizzard item ID), `source_id` → `item_source`, `name`, `img_id` (ImageKit key of the item icon, = the item ID as text), `slot`, `armor_type?`, `weapon_type?`, `offhand_type?`, `main_stats[]`, `secondary_stats[]`, `roles[]` (trinkets), `special_effect?`, `imported_from` (`PRE_RELEASE` \| `RETAIL` \| `MANUAL`), `source_payload jsonb` (raw import record as received, for debugging; never returned by public endpoints) |
 | `character_class`, `spec` | replaces `globals/specs.ts`: `character_class.name` (unique), `character_class.blizzard_class_id` (unique, e.g. 11 = Druid); `spec.blizzard_spec_id` (unique, e.g. 102 = Balance), `spec.class_id`, `spec.name` (unique per class), `spec.role`, `spec.main_stat`, `spec.weapon_types[]`, `spec.offhand_types[]`; unique (`id`, `class_id`) for the composite keys below |
 
 Codes (`season.code`, `instance.code`, `raid_boss.code`) are unique and act as stable natural keys: imports and change sets refer to rows by code, never by database ID.
@@ -122,7 +122,7 @@ The one-off seed reads `gear-store.json`, `manual_items.ts` and `globals/*.ts` f
 
 | Legacy | Database |
 | --- | --- |
-| `itemId`, `name`, `imgId` | `item.id`, `item.name`, `item.icon_key` |
+| `itemId`, `name`, `imgId` | `item.id`, `item.name`, `item.img_id` (legacy icon names were replaced by item IDs in the frontend data before seeding) |
 | `lootSource: "FLOOD"` (dungeon code) | `item_source` of type `DUNGEON` for instance `FLOOD` |
 | `lootSource: { raid, bossName }` | `item_source` of type `RAID` for raid boss `bossName` (in raid `raid`) |
 | `slot`, `weaponType`, `armorType`, `offhandType`, `mainStats`, `secondaryStats`, `roles`, `specialEffect` | same-named columns; missing lists become `{}` (`roles` stays NULL outside trinkets) |

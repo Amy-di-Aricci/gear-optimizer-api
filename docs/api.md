@@ -19,7 +19,7 @@ Items keep the shape of today's `gear-store.json`, so the frontend's filtering a
 {
   "itemId": 268283,
   "name": "Festerbloom Crown",
-  "imgId": "inv_helm_leather_raiddruidmidnight_d_01",
+  "imgId": "268283",                // ImageKit key: images/icons/<imgId>.jpg
   "slot": "HEAD",
   "armorType": "LEATHER",             // or weaponType / offhandType, depending on the slot
   "mainStats": ["INT"],               // weapons, trinkets and off-hands that have them

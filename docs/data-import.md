@@ -41,7 +41,7 @@ A versioned JSON document. The schema is the contract between the external tool 
     {
       "id": 268283,                      // Blizzard item ID
       "name": "Festerbloom Crown",
-      "icon": "inv_helm_leather_raiddruidmidnight_d_01",
+      "imgId": "268283",                 // ImageKit key of the icon, = the item ID
       "slot": "HEAD",
       "armorType": "LEATHER",            // weaponType / offhandType / roles / mainStats as applicable
       "secondaryStats": ["CRIT", "HASTE"],
@@ -60,7 +60,7 @@ Semantics:
 
 ## Images
 
-All images live on ImageKit: item icons (today at `images/icons/<itemId>.jpg`) and instance, season and expansion art (e.g. `images/instance-img/<name>.webp`). The API never stores image files; rows only hold keys.
+All images live on ImageKit: item icons (at `images/icons/<imgId>.jpg`, where `imgId` is the item ID) and instance, season and expansion art (e.g. `images/instance-img/<name>.webp`). The API never stores image files; rows only hold keys.
 
 - **The import tool uploads them.** The private tool already downloads images while it collects data. It uploads any missing ones to the ImageKit account of the stage it targets (staging or production, see [environments](environments.md)) **before** the import file is uploaded. The ImageKit private key for that stage stays on the machine running the tool, never in a repository.
 - **Uploads are idempotent:** the path is derived from the item ID or the code, so re-running the tool skips files that already exist.
